@@ -1,22 +1,58 @@
 @import "tailwindcss";
 
+@import "tailwindcss";
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+
+  --ikbs-primary: #16476a;
+  --ikbs-primary-dark: #0d2f46;
+  --ikbs-success: #5bcb77;
+  --ikbs-accent: #f59e0b;
+
+  --ikbs-muted: #64748b;
+  --ikbs-border: #e2e8f0;
+  --ikbs-card: #ffffff;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+
+  --ikbs-primary: #5fa8d3;
+  --ikbs-primary-dark: #16476a;
+  --ikbs-success: #5bcb77;
+  --ikbs-accent: #fbbf24;
+
+  --ikbs-muted: #94a3b8;
+  --ikbs-border: #334155;
+  --ikbs-card: #1e293b;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-ikbs-primary: var(--ikbs-primary);
+  --color-ikbs-primary-dark: var(--ikbs-primary-dark);
+  --color-ikbs-success: var(--ikbs-success);
+  --color-ikbs-accent: var(--ikbs-accent);
+
+  --color-ikbs-muted: var(--ikbs-muted);
+  --color-ikbs-border: var(--ikbs-border);
+  --color-ikbs-card: var(--ikbs-card);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
