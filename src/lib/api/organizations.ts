@@ -3,6 +3,7 @@ import { apiClient } from "./client";
 import type {
   Organization,
   OrganizationListResponse,
+  OrganizationStatus,
 } from "@/types/organization";
 
 export interface ListOrganizationsParams {
@@ -82,6 +83,20 @@ export async function updateOrganization(
     {
       method: "PATCH",
       body: JSON.stringify(data),
+    },
+  );
+}
+export async function changeOrganizationStatus(
+  id: string,
+  status: OrganizationStatus,
+): Promise<Organization> {
+  return apiClient<Organization>(
+    `/organizations/${id}/status`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        status,
+      }),
     },
   );
 }

@@ -1,11 +1,18 @@
 import type {
   DynamicFormField,
   FormValues,
+  FormErrors
 } from "@/components/ui/forms/DynamicForm";
 
 import type {
   Organization,
 } from "@/types/organization";
+import type {
+  CreateOrganizationInput,
+  UpdateOrganizationInput,
+} from "@/lib/api/organizations";
+
+
 
 /**
  * Configuration des champs du formulaire Organization.
@@ -95,4 +102,110 @@ export function organizationToFormValues(
     address: organization.address ?? "",
     logoUrl: organization.logoUrl ?? "",
   };
+}
+
+function getStringValue(
+  values: FormValues,
+  key: string,
+): string {
+  const value = values[key];
+
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim();
+}
+
+function optionalString(
+  value: string,
+): string | undefined {
+  return value || undefined;
+}
+
+export function organizationFormToCreateInput(
+  values: FormValues,
+): CreateOrganizationInput {
+  return {
+    name: getStringValue(
+      values,
+      "name",
+    ),
+
+    description: optionalString(
+      getStringValue(
+        values,
+        "description",
+      ),
+    ),
+
+    email: optionalString(
+      getStringValue(
+        values,
+        "email",
+      ),
+    ),
+
+    phone: optionalString(
+      getStringValue(
+        values,
+        "phone",
+      ),
+    ),
+
+    address: optionalString(
+      getStringValue(
+        values,
+        "address",
+      ),
+    ),
+
+    logoUrl: optionalString(
+      getStringValue(
+        values,
+        "logoUrl",
+      ),
+    ),
+  };
+}
+
+export function organizationFormToUpdateInput(
+  values: FormValues,
+): UpdateOrganizationInput {
+  return organizationFormToCreateInput(
+    values,
+  );
+}
+
+export function validateOrganizationForm(
+  values: FormValues,
+): FormErrors {
+  const errors: FormErrors = {};
+
+  const name = getStringValue(
+    values,
+    "name",
+  );
+
+  const email = getStringValue(
+    values,
+    "email",
+  );
+
+  if (!name) {
+    errors.name =
+      "Le nom de l'organisation est obligatoire.";
+  }
+
+  if (email) {
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(email)) {
+      errors.email =
+        "L'adresse email n'est pas valide.";
+    }
+  }
+
+  return errors;
 }

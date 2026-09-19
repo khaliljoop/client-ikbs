@@ -1,15 +1,10 @@
 
-// export default function OrganizationsPage() {
-//   return (
-//     <div>
-//       <h1>Organisations</h1>
-//     </div>
-//   );
-// }
 
 "use client";
 
 import {
+  useCallback,
+  useEffect,
   useState,
 } from "react";
 
@@ -21,10 +16,12 @@ import OrganizationList from "@/features/organizations/components/OrganizationLi
 
 import type {
   Organization,
+  OrganizationStatus,
 } from "@/types/organization";
 import FormModal from "@/components/ui/forms/FormModal";
 
 import type {
+   FormErrors,
   FormValue,
   FormValues,
 } from "@/components/ui/forms/DynamicForm";
@@ -32,12 +29,25 @@ import type {
 import {
   createEmptyOrganizationFormValues,
   organizationFormFields,
+  organizationFormToCreateInput,
+  organizationFormToUpdateInput,
   organizationToFormValues,
+  validateOrganizationForm,
 } from "@/features/organizations/forms/organization-form";
 
 import {
   useToast,
 } from "@/components/ui/toast/ToastProvider";
+
+import {
+  createOrganization,
+  updateOrganization,
+  changeOrganizationStatus,
+  listOrganizations,
+  deleteOrganization,
+} from "@/lib/api/organizations";
+import ConfirmModal from "@/components/ui/modal/ConfirmModal";
+
 
 const organizationsMock: Organization[] = [
   {
@@ -91,7 +101,14 @@ const organizationsMock: Organization[] = [
 
 export default function OrganizationsPage() {
 
-  const toast = useToast();
+  const  toast=useToast();
+  const {
+  success,error: showError,
+} = useToast();
+const [
+  formErrors,
+  setFormErrors,
+] = useState<FormErrors>({});
 
 const [
   formModalOpen,
@@ -121,6 +138,43 @@ const [
 
   const [search, setSearch] = useState("");
 
+  const [
+  organizations,
+  setOrganizations,
+] = useState<Organization[]>([]);
+
+const [
+  organizationToDelete,
+  setOrganizationToDelete,
+] = useState<Organization | null>(null);
+
+const [
+  deleting,
+  setDeleting,
+] = useState(false);
+
+
+const [
+  changingStatusId,
+  setChangingStatusId,
+] = useState<string | null>(null);
+
+
+const [
+  debouncedSearch,
+  setDebouncedSearch,
+] = useState("");
+
+const [
+  total,
+  setTotal,
+] = useState(0);
+
+const [
+  loading,
+  setLoading,
+] = useState(false);
+
   const filteredOrganizations =
     organizationsMock.filter(
       (organization) => {
@@ -142,14 +196,61 @@ const [
         );
       },
     );
+const fetchOrganizations =
+  useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const response = await listOrganizations({
+          page,
+          limit,
+          search:
+            debouncedSearch ||
+            undefined,
+        });
+
+      setOrganizations(
+        response.items,
+      );
+
+      setTotal(
+        response.total,
+      );
+    } catch (error) {
+      console.error(
+        "Erreur récupération organisations :",
+        error,
+      );
+
+      setOrganizations([]);
+      setTotal(0);
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Impossible de récupérer les organisations.",
+        "Erreur",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    page,
+    limit,
+    debouncedSearch,
+    toast,
+  ]);
 
 
-    const handleAdd = () => {
+
+const handleAdd = () => {
   setSelectedOrganization(null);
 
   setFormValues(
     createEmptyOrganizationFormValues(),
   );
+
+  setFormErrors({});
 
   setFormModalOpen(true);
 };
@@ -167,44 +268,181 @@ const handleEdit = (
     ),
   );
 
+  setFormErrors({});
+
   setFormModalOpen(true);
+};
+
+const handleChangeStatus = async (
+  organization: Organization,
+) => {
+  const nextStatus =
+    organization.status === "ACTIVE"
+      ? "SUSPENDED"
+      : "ACTIVE";
+
+  setChangingStatusId(
+    organization.id,
+  );
+
+  try {
+    await changeOrganizationStatus(
+      organization.id,
+      nextStatus,
+    );
+
+    toast.success(
+      nextStatus === "ACTIVE"
+        ? "L'organisation a été activée avec succès."
+        : "L'organisation a été suspendue avec succès.",
+      nextStatus === "ACTIVE"
+        ? "Organisation activée"
+        : "Organisation suspendue",
+    );
+
+    await fetchOrganizations();
+  } catch (error) {
+    console.error(
+      "Erreur changement statut organisation :",
+      error,
+    );
+
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : "Impossible de modifier le statut de l'organisation.",
+      "Erreur",
+    );
+  } finally {
+    setChangingStatusId(null);
+  }
+};
+
+const handleDelete = async () => {
+  if (!organizationToDelete) {
+    return;
+  }
+
+  setDeleting(true);
+
+  try {
+    await deleteOrganization(
+      organizationToDelete.id,
+    );
+
+    toast.success(
+      "L'organisation a été supprimée avec succès.",
+      "Organisation supprimée",
+    );
+
+    setOrganizationToDelete(null);
+
+    const remainingItemsOnPage =
+      organizations.length - 1;
+
+    if (
+      remainingItemsOnPage === 0 &&
+      page > 1
+    ) {
+      setPage((current) => current - 1);
+    } else {
+      await fetchOrganizations();
+    }
+  } catch (error) {
+    console.error(
+      "Erreur suppression organisation :",
+      error,
+    );
+
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : "Impossible de supprimer l'organisation.",
+      "Erreur",
+    );
+  } finally {
+    setDeleting(false);
+  }
 };
 
 const handleFormChange = (
   name: string,
   value: FormValue,
 ) => {
-  setFormValues(
-    (current) => ({
-      ...current,
-      [name]: value,
-    }),
-  );
+  setFormValues((current) => ({
+    ...current,
+    [name]: value,
+  }));
+
+  setFormErrors((current) => ({
+    ...current,
+    [name]: undefined,
+  }));
 };
 
 const handleSubmit = async () => {
-  setSaving(true);
-
-  try {
-    console.log(
-      selectedOrganization
-        ? "Modification"
-        : "Création",
+  const errors =
+    validateOrganizationForm(
       formValues,
     );
 
-    // Simulation API
-    await new Promise(
-      (resolve) =>
-        setTimeout(resolve, 800),
-    );
+  if (
+    Object.values(errors).some(
+      Boolean,
+    )
+  ) {
+    setFormErrors(errors);
+    return;
+  }
 
+  setSaving(true);
+
+  try {
     if (selectedOrganization) {
+      // ============================
+      // MODIFICATION
+      // ============================
+
+      const payload =
+        organizationFormToUpdateInput(
+          formValues,
+        );
+
+      const organization =
+        await updateOrganization(
+          selectedOrganization.id,
+          payload,
+        );
+
+      console.log(
+        "Organisation modifiée :",
+        organization,
+      );
+
       toast.success(
         "L'organisation a été modifiée avec succès.",
         "Organisation modifiée",
       );
     } else {
+      // ============================
+      // CRÉATION
+      // ============================
+
+      const payload =
+        organizationFormToCreateInput(
+          formValues,
+        );
+
+      const organization =
+        await createOrganization(
+          payload,
+        );
+
+      console.log(
+        "Organisation créée :",
+        organization,
+      );
+
       toast.success(
         "L'organisation a été ajoutée avec succès.",
         "Organisation ajoutée",
@@ -212,9 +450,18 @@ const handleSubmit = async () => {
     }
 
     handleCloseForm();
-  } catch {
+
+    await fetchOrganizations();
+  } catch (error) {
+    console.error(
+      "Erreur enregistrement organisation :",
+      error,
+    );
+
     toast.error(
-      "Une erreur est survenue pendant l'enregistrement.",
+      error instanceof Error
+        ? error.message
+        : "Une erreur est survenue pendant l'enregistrement.",
       "Erreur",
     );
   } finally {
@@ -230,7 +477,38 @@ const handleCloseForm = () => {
   setFormValues(
     createEmptyOrganizationFormValues(),
   );
+
+  setFormErrors({});
 };
+
+
+
+  useEffect(() => {
+  const timeout = window.setTimeout(
+    () => {
+      setDebouncedSearch(
+        search.trim(),
+      );
+    },
+    400,
+  );
+
+  return () => {
+    window.clearTimeout(
+      timeout,
+    );
+  };
+}, [search]);
+
+useEffect(() => {
+  void fetchOrganizations();
+}, [fetchOrganizations]);
+
+
+
+
+
+
 
   return (
     <section
@@ -333,71 +611,80 @@ const handleCloseForm = () => {
 
       {/* TABLE */}
 
+      
       <OrganizationList
-        organizations={
-          filteredOrganizations
-        }
+        organizations={organizations}
+        loading={loading}
         page={page}
         limit={limit}
-        total={
-          filteredOrganizations.length
-        }
+        total={total}
         onSearch={(value) => {
           setSearch(value);
           setPage(1);
         }}
-        onPageChange={
-          setPage
-        }
-        onLimitChange={(
-          value,
-        ) => {
+        onPageChange={(value) => {
+          setPage(value);
+        }}
+        onLimitChange={(value) => {
           setLimit(value);
           setPage(1);
         }}
         onEdit={handleEdit}
-        onDelete={(
-          organization,
-        ) => {
-          console.log(
-            "Supprimer :",
+        onDelete={(organization) => {
+          setOrganizationToDelete(
             organization,
           );
         }}
-        onChangeStatus={(
-          organization,
-        ) => {
-          console.log(
-            "Changer statut :",
-            organization,
-          );
-        }}
+        onChangeStatus={
+          handleChangeStatus
+        }
       />
 
       <FormModal
-        open={formModalOpen}
-        title={
-          selectedOrganization
-            ? "Modifier l'organisation"
-            : "Ajouter une organisation"
+      open={formModalOpen}
+      title={
+        selectedOrganization
+          ? "Modifier l'organisation"
+          : "Ajouter une organisation"
+      }
+      fields={organizationFormFields}
+      values={formValues}
+      errors={formErrors}
+      columns={2}
+      loading={saving}
+      submitLabel={
+        selectedOrganization
+          ? "Modifier"
+          : "Enregistrer"
+      }
+      onChange={handleFormChange}
+      onSubmit={handleSubmit}
+      onClose={() => {
+        if (!saving) {
+          handleCloseForm();
         }
-        fields={organizationFormFields}
-        values={formValues}
-        columns={2}
-        loading={saving}
-        submitLabel={
-          selectedOrganization
-            ? "Modifier"
-            : "Enregistrer"
+      }}
+    />
+
+    <ConfirmModal
+      open={organizationToDelete !== null}
+      title="Supprimer l'organisation"
+      message={
+        organizationToDelete
+          ? `Voulez-vous vraiment supprimer « ${organizationToDelete.name} » ? Cette action est irréversible.`
+          : ""
+      }
+      confirmLabel="Supprimer"
+      cancelLabel="Annuler"
+      danger
+      loading={deleting}
+      onConfirm={handleDelete}
+      onClose={() => {
+        if (!deleting) {
+          setOrganizationToDelete(null);
         }
-        onChange={handleFormChange}
-        onSubmit={handleSubmit}
-        onClose={() => {
-          if (!saving) {
-            handleCloseForm();
-          }
-        }}
-      />
+      }}
+    />
     </section>
   );
 }
