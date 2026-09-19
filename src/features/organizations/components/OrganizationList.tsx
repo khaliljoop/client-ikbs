@@ -3,6 +3,7 @@
 import {
   Pencil,
   Power,
+PowerOff,
   Trash2,
 } from "lucide-react";
 
@@ -195,24 +196,17 @@ export default function OrganizationList({
 
           {
             key: "status",
-
-            label:
-              organization.status ===
-              "ACTIVE"
+            label: organization.status === "ACTIVE"
                 ? "Suspendre"
                 : "Activer",
-
-            icon: (
-              <Power size={16} />
-            ),
-
-            hidden:
-              organization.status ===
-              "ARCHIVED",
-
-            onClick:
-              onChangeStatus,
-          },
+            icon:organization.status === "ACTIVE" ? (
+                <PowerOff size={16} />
+                ) : (
+                <Power size={16} />
+                ),
+            onClick: () =>onChangeStatus(organization),
+            hidden:organization.status === "ARCHIVED",
+            },
 
           {
             key: "delete",
