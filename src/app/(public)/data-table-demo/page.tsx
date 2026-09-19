@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Power, Trash2 } from "lucide-react";
+import { 
+  Pencil, Power, Trash2,Users,
+  CalendarDays,
+  WalletCards,
+  Settings, } from "lucide-react";
 import DataTable from "@/components/ui/table/DataTable";
 import type { DataTableColumn } from "@/components/ui/table/types";
 import InputGroup from "@/components/ui/forms/InputGroup";
@@ -14,6 +18,17 @@ import DynamicForm, {
   type FormValue,
   type FormValues,
 } from "@/components/ui/forms/DynamicForm";
+import FormModal from "@/components/ui/forms/FormModal";
+import {
+  useToast,
+} from "@/components/ui/toast/ToastProvider";
+import Alert from "@/components/ui/alert/Alert";
+
+
+import Tabs, {
+  type TabItem,
+  type TabValue,
+} from "@/components/ui/tabs/Tabs";
 
 interface DemoOrganization {
   id: string;
@@ -94,14 +109,14 @@ const columns: DataTableColumn<DemoOrganization>[] = [
 ];
 
 export default function DataTableDemoPage() {
+  const toast = useToast();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [modalOpen, setModalOpen] = useState(false);
   // const [status, setStatus] = useState("");
   // const [commissions, setCommissions] = useState<string[]>([]);
-  const [status, setStatus] =
-  useState<SelectValue>("");
+  const [status, setStatus] =useState<SelectValue>("");
 
 const [commissions, setCommissions] = useState<SelectValue[]>([]);
   const [organizationName, setOrganizationName] =useState("");
@@ -132,12 +147,15 @@ const [commissions, setCommissions] = useState<SelectValue[]>([]);
   useState<FormValues>({
     name: "",
     email: "",
-    status: "",
+     status: "ACTIVE",
     contributionType: "MONTHLY",
     commissions: [],
     permissions: [],
   });
 
+  const [formModalOpen, setFormModalOpen] =useState(false);
+const [saving, setSaving] =useState(false);
+const [showWarning, setShowWarning] =useState(true);
 const fields: DynamicFormField[] = [
   {
     type: "input",
@@ -234,9 +252,117 @@ const fields: DynamicFormField[] = [
   },
 ];
 
+const organizationFields: DynamicFormField[] = [
+  {
+    type: "input",
+    name: "name",
+    label: "Nom de l'organisation",
+    placeholder: "Ex : Association Espoir",
+    required: true,
+  },
+  {
+    type: "input",
+    name: "email",
+    label: "Email",
+    inputType: "email",
+    placeholder: "contact@organisation.sn",
+  },
+  {
+    type: "input",
+    name: "phone",
+    label: "Téléphone",
+    inputType: "tel",
+    placeholder: "+221 77 000 00 00",
+  },
+  {
+    type: "select",
+    name: "status",
+    label: "Statut",
+    options: [
+      {
+        value: "ACTIVE",
+        label: "Actif",
+      },
+      {
+        value: "SUSPENDED",
+        label: "Suspendu",
+      },
+    ],
+  },
+  {
+    type: "radio",
+    name: "contributionType",
+    label: "Cotisation",
+    orientation: "horizontal",
+    options: [
+      {
+        value: "MONTHLY",
+        label: "Mensuelle",
+      },
+      {
+        value: "YEARLY",
+        label: "Annuelle",
+      },
+    ],
+  },
+];
+
+// tabs
+const [activeTab, setActiveTab] = useState<TabValue>("members");
+
+const tabs: TabItem[] = [
+  {
+    value: "members",
+    label: "Membres",
+    icon: <Users size={17} />,
+    badge: 125,
+    content: (
+      <div>
+        Liste des membres
+      </div>
+    ),
+  },
+  {
+    value: "contributions",
+    label: "Cotisations",
+    icon: <WalletCards size={17} />,
+    content: (
+      <div>
+        Gestion des cotisations
+      </div>
+    ),
+  },
+  {
+    value: "events",
+    label: "Événements",
+    icon: <CalendarDays size={17} />,
+    badge: 3,
+    content: (
+      <div>
+        Liste des événements
+      </div>
+    ),
+  },
+  {
+    value: "settings",
+    label: "Paramètres",
+    icon: <Settings size={17} />,
+    content: (
+      <div>
+        Paramètres de l'organisation
+      </div>
+    ),
+  },
+];
+
   return (
     <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <DynamicForm
+      <Tabs
+        items={tabs}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
+      {/* <DynamicForm
         fields={fields}
         values={formValues}
         columns={1}
@@ -258,8 +384,75 @@ const fields: DynamicFormField[] = [
             value,
           );
         }}
-      />
-      <TreeGroup
+      /> */}
+      <button
+        type="button"
+        onClick={() =>
+          setFormModalOpen(true)
+        }
+        className="
+          rounded-lg
+          bg-ikbs-primary
+          px-4
+          py-2.5
+          text-sm
+          font-medium
+          text-white
+        "
+      >
+        Ajouter une organisation
+      </button>
+      <div className="space-y-4">
+
+        <Alert
+          type="success"
+          title="Succès"
+        >
+          Les informations ont été enregistrées
+          avec succès.
+        </Alert>
+
+        <Alert
+          type="info"
+          title="Information"
+        >
+          Les modifications seront visibles par
+          tous les membres de l&apos;organisation.
+        </Alert>
+
+        <Alert
+          type="warning"
+          title="Organisation suspendue"
+        >
+          Les membres de cette organisation ne
+          peuvent actuellement pas accéder à leur
+          espace.
+        </Alert>
+
+        <Alert
+          type="error"
+          title="Erreur"
+        >
+          Impossible de récupérer les informations
+          de l&apos;organisation.
+        </Alert>
+
+        {showWarning && (
+          <Alert
+            type="warning"
+            title="Attention"
+            dismissible
+            onClose={() =>
+              setShowWarning(false)
+            }
+          >
+            Certaines informations sont
+            manquantes.
+          </Alert>
+        )}
+
+      </div>
+      {/* <TreeGroup
       label="Permissions"
       name="permissions"
       multiple={false}
@@ -364,7 +557,7 @@ const fields: DynamicFormField[] = [
             
             setCommissions(value as string[]);
           }}
-      />
+      /> */}
        <div className="mb-6 max-w-md">
       <InputGroup
         label="Nom de l'organisation"
@@ -522,36 +715,98 @@ const fields: DynamicFormField[] = [
         emptyMessage="Aucune organisation trouvée."
       />
       <Modal
-  open={modalOpen}
-  onClose={() => setModalOpen(false)}
-  title="Test du modal"
-  size="md"
->
-  <div className="space-y-4">
-    <p className="text-sm text-ikbs-muted">
-      Ceci est un modal générique IKBS.
-    </p>
-
-    <div className="flex justify-end">
-      <button
-        type="button"
-        onClick={() => setModalOpen(false)}
-        className="
-          rounded-lg
-          bg-ikbs-primary
-          px-4
-          py-2
-          text-sm
-          font-medium
-          text-white
-          hover:bg-ikbs-primary-dark
-        "
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Test du modal"
+        size="md"
       >
-        Fermer
-      </button>
-    </div>
-  </div>
-</Modal>
+        <div className="space-y-4">
+          <p className="text-sm text-ikbs-muted">
+            Ceci est un modal générique IKBS.
+          </p>
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setModalOpen(false)}
+              className="
+                rounded-lg
+                bg-ikbs-primary
+                px-4
+                py-2
+                text-sm
+                font-medium
+                text-white
+                hover:bg-ikbs-primary-dark
+              "
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      </Modal>
+      <FormModal
+        open={formModalOpen}
+        title="Ajouter une organisation"
+        fields={organizationFields}
+        values={formValues}
+        columns={2}
+        loading={saving}
+        onChange={(
+          name: string,
+          value: FormValue,
+        ) => {
+          setFormValues(
+            (current) => ({
+              ...current,
+              [name]: value,
+            }),
+          );
+        }}
+        onSubmit={async () => {
+          setSaving(true);
+
+          try {
+            await new Promise(
+              (resolve) =>
+                setTimeout(
+                  resolve,
+                  1000,
+                ),
+            );
+
+            toast.success(
+              "Organisation ajoutée avec succès.",
+            );
+
+            // toast.error(
+            //   "Impossible de supprimer l'organisation.",
+            // );
+
+            // toast.warning(
+            //   "Cette organisation est actuellement suspendue.",
+            // );
+
+            // toast.info(
+            //   "Les informations ont été mises à jour.",
+            // );
+
+            setFormModalOpen(false);
+          } catch {
+            toast.error(
+              "Une erreur est survenue pendant l'enregistrement.",
+              "Erreur",
+            );
+          } finally {
+            setSaving(false);
+          }
+        }}
+        onClose={() => {
+          if (!saving) {
+            setFormModalOpen(false);
+          }
+        }}
+      />
     </section>
   );
 }

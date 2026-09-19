@@ -19,6 +19,8 @@ import TreeGroup, {
   type TreeValue,
 } from "./TreeGroup";
 
+import TextareaGroup from "./TextareaGroup";
+
 /* =====================================================
  * TYPES
  * ===================================================== */
@@ -51,6 +53,16 @@ interface BaseField {
   helperText?: string;
 
   className?: string;
+}
+/* =====================================================
+ * TEXTAREA
+ * ===================================================== */
+export interface TextareaField
+  extends BaseField {
+  type: "textarea";
+
+  rows?: number;
+  maxLength?: number;
 }
 
 /* =====================================================
@@ -130,6 +142,7 @@ export interface TreeField
 
 export type DynamicFormField =
   | InputField
+  | TextareaField
   | SelectField
   | RadioField
   | TreeField;
@@ -187,6 +200,33 @@ export default function DynamicForm({
     const error =
       errors[field.name];
 
+    /*
+     * TEXTAREA
+     */
+    if (field.type === "textarea") {
+  return (
+    <TextareaGroup
+      label={field.label}
+      name={field.name}
+      value={String(
+        values[field.name] ?? "",
+      )}
+      placeholder={field.placeholder}
+      required={field.required}
+      disabled={field.disabled}
+      error={errors?.[field.name]}
+      helperText={field.helperText}
+      rows={field.rows}
+      maxLength={field.maxLength}
+      onChange={(value) =>
+        onChange(
+          field.name,
+          value,
+        )
+      }
+    />
+  );
+}
     /*
      * INPUT
      */
