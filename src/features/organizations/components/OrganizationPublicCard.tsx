@@ -8,6 +8,7 @@ import {
 import Link from "next/link";
 
 import type { Organization } from "@/types/organization";
+import { organisationRoutes } from "@/config/routes";
 
 interface OrganizationPublicCardProps {
   organization: Organization;
@@ -185,7 +186,7 @@ export default function OrganizationPublicCard({
 
         {/* Footer */}
         <div className="mt-auto pt-6">
-          <Link
+          {/* <Link
             href={`/organisations/${organization.code}`}
             className="
               flex w-full items-center
@@ -211,7 +212,14 @@ export default function OrganizationPublicCard({
                 group-hover:translate-x-1
               "
             />
-          </Link>
+          </Link> */}
+          <Link
+            href={organisationRoutes.public(
+                organization.code,
+            )}
+            >
+            Voir l&apos;organisation
+            </Link>
         </div>
       </div>
     </article>

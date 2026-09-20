@@ -2,6 +2,7 @@ import type {
   ReactNode,
 } from "react";
 
+import OrganizationAuthGuard from "@/features/organizations/components/OrganizationAuthGuard";
 import OrganizationShell from "@/components/layout/OrganizationShell";
 
 interface OrganizationLayoutProps {
@@ -21,12 +22,18 @@ export default async function OrganizationLayout({
   } = await params;
 
   return (
-    <OrganizationShell
+    <OrganizationAuthGuard
       organizationCode={
         organizationCode
       }
     >
-      {children}
-    </OrganizationShell>
+      <OrganizationShell
+        organizationCode={
+          organizationCode
+        }
+      >
+        {children}
+      </OrganizationShell>
+    </OrganizationAuthGuard>
   );
 }

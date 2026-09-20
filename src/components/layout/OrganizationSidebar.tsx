@@ -1,9 +1,6 @@
 "use client";
-
 import Link from "next/link";
-import {
-  usePathname,
-} from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import {
   ChevronLeft,
@@ -12,8 +9,12 @@ import {
 } from "lucide-react";
 
 import {
-  organizationMenu,
+  getOrganizationMenu,
 } from "@/config/organization-menu";
+
+import {
+  organisationRoutes,
+} from "@/config/routes";
 
 interface OrganizationSidebarProps {
   organizationCode: string;
@@ -36,37 +37,41 @@ export default function OrganizationSidebar({
 }: OrganizationSidebarProps) {
   const pathname = usePathname();
 
-  const basePath =
-    `/organisations/${organizationCode}`;
+  const dashboardPath =
+  organisationRoutes.dashboard(
+    organizationCode,
+  );
+
+const menuItems =
+  getOrganizationMenu(
+    organizationCode,
+  );
 
   const isActive = (
-    path: string,
-  ) => {
-    const href =
-      `${basePath}${path}`;
+  href: string,
+) => {
+  /*
+   * Dashboard :
+   * uniquement correspondance exacte.
+   */
+  if (href === dashboardPath) {
+    return pathname === href;
+  }
 
-    /*
-     * Dashboard :
-     * correspondance exacte.
-     */
-    if (path === "") {
-      return pathname === basePath;
-    }
-
-    /*
-     * Autres menus :
-     * actif également sur les sous-routes.
-     *
-     * Exemple :
-     * /membres/123
-     */
-    return (
-      pathname === href ||
-      pathname.startsWith(
-        `${href}/`,
-      )
-    );
-  };
+  /*
+   * Autres menus :
+   * actif également sur les sous-routes.
+   *
+   * Exemple :
+   * /espace/B1304049/membres/123
+   */
+  return (
+    pathname === href ||
+    pathname.startsWith(
+      `${href}/`,
+    )
+  );
+};
 
   return (
     <>
@@ -137,35 +142,33 @@ export default function OrganizationSidebar({
         >
           {!collapsed && (
             <Link
-              href={basePath}
-              className="
-                truncate
-                text-lg
-                font-bold
-                text-ikbs-primary
-              "
-              onClick={
-                onCloseMobile
-              }
-            >
-              IKBS
-            </Link>
+                href={dashboardPath}
+                className="
+                    truncate
+                    text-lg
+                    font-bold
+                    text-ikbs-primary
+                "
+                onClick={onCloseMobile}
+                >
+                IKBS
+                </Link>
           )}
 
           {collapsed && (
             <Link
-              href={basePath}
-              className="
-                hidden
-                w-full
-                text-center
-                text-lg
-                font-bold
-                text-ikbs-primary
-                lg:block
-              "
-            >
-              I
+                href={dashboardPath}
+                className="
+                    hidden
+                    w-full
+                    text-center
+                    text-lg
+                    font-bold
+                    text-ikbs-primary
+                    lg:block
+                "
+                >
+                I
             </Link>
           )}
 
@@ -204,34 +207,29 @@ export default function OrganizationSidebar({
           "
         >
           <ul className="space-y-1">
-            {organizationMenu.map(
-              (item) => {
-                const href =
-                  `${basePath}${item.path}`;
-
+            {menuItems.map(
+            (item) => {
                 const active =
-                  isActive(
-                    item.path,
-                  );
+                isActive(
+                    item.href,
+                );
 
                 const Icon =
-                  item.icon;
+                item.icon;
 
                 return (
-                  <li
-                    key={item.key}
-                  >
+                <li key={item.key}>
                     <Link
-                      href={href}
-                      onClick={
+                    href={item.href}
+                    onClick={
                         onCloseMobile
-                      }
-                      title={
+                    }
+                    title={
                         collapsed
-                          ? item.label
-                          : undefined
-                      }
-                      className={`
+                        ? item.label
+                        : undefined
+                    }
+                    className={`
                         flex
                         h-11
                         items-center
@@ -241,53 +239,53 @@ export default function OrganizationSidebar({
                         transition
 
                         ${
-                          collapsed
+                        collapsed
                             ? `
-                              lg:justify-center
-                              lg:px-0
+                            lg:justify-center
+                            lg:px-0
                             `
                             : `
-                              gap-3
-                              px-3
+                            gap-3
+                            px-3
                             `
                         }
 
                         ${
-                          active
+                        active
                             ? `
-                              bg-ikbs-primary
-                              text-white
+                            bg-ikbs-primary
+                            text-white
                             `
                             : `
-                              text-ikbs-muted
-                              hover:bg-ikbs-primary/10
-                              hover:text-ikbs-primary
+                            text-ikbs-muted
+                            hover:bg-ikbs-primary/10
+                            hover:text-ikbs-primary
                             `
                         }
-                      `}
+                    `}
                     >
-                      <Icon
+                    <Icon
                         size={19}
                         className="shrink-0"
-                      />
+                    />
 
-                      <span
+                    <span
                         className={`
-                          truncate
+                        truncate
 
-                          ${
+                        ${
                             collapsed
-                              ? "lg:hidden"
-                              : ""
-                          }
+                            ? "lg:hidden"
+                            : ""
+                        }
                         `}
-                      >
+                    >
                         {item.label}
-                      </span>
+                    </span>
                     </Link>
-                  </li>
+                </li>
                 );
-              },
+            },
             )}
           </ul>
         </nav>

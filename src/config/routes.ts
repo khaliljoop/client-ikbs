@@ -1,11 +1,11 @@
-// export const routes = {
-//   home: "/",
-//   services: "/services",
-//   organisations: "/organisations",
-//   login: "/login",
-//   register: "/register",
-//   forgotPassword: "/forgot-password",
-// } as const;
+export const routes = {
+  home: "/",
+  services: "/services",
+  organisations: "/organisations",
+  login: "/login",
+  register: "/register",
+  forgotPassword: "/forgot-password",
+} as const;
 
 export const organisationRoutes = {
   public: (
@@ -48,18 +48,3 @@ export const organisationRoutes = {
   ) =>
     `/espace/${organizationCode}/parametres`,
 } as const;
-
-
-
-// Pour les routes dynamiques d'organisation, on pourra ensuite créer des fonctions :
-
-// export const organisationRoutes = {
-//   public: (organizationCode: string) =>
-//     `/organisations/${organizationCode}`,
-
-//   dashboard: (organizationCode: string) =>
-//     `/organisations/${organizationCode}`,
-
-//   members: (organizationCode: string) =>
-//     `/organisations/${organizationCode}/membres`,
-// } as const;

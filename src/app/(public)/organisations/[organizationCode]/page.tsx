@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowRight,
   Building2,
   Mail,
@@ -8,7 +9,10 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { routes } from "@/config/routes";
+import {
+  organisationRoutes,
+  routes,
+} from "@/config/routes";
 import { getPublicOrganization } from "@/lib/api/organizations";
 
 interface OrganizationDetailsPageProps {
@@ -58,20 +62,26 @@ export default async function OrganizationDetailsPage({
           "
         >
           {/* Retour */}
-          <Link
+         <Link
             href={routes.organisations}
             className="
-              inline-flex items-center
-              gap-2
-              text-sm font-medium
-              text-ikbs-muted
-              transition
-              hover:text-ikbs-primary
+                inline-flex items-center
+                gap-2
+                text-sm font-medium
+                text-ikbs-muted
+                transition
+                hover:text-ikbs-primary
             "
-          >
-            <span>←</span>
-            Retour aux organisations
-          </Link>
+            >
+            <ArrowLeft
+                size={16}
+                aria-hidden="true"
+            />
+
+            <span>
+                Retour aux organisations
+            </span>
+            </Link>
 
           <div
             className="
@@ -169,27 +179,28 @@ export default async function OrganizationDetailsPage({
 
             {/* Espace privé */}
             <Link
-              href={`/login?redirect=${encodeURIComponent(
-                `/organisations/${organization.code}`,
-              )}`}
-              className="
-                inline-flex
-                items-center
-                justify-center
-                gap-2
-                rounded-xl
-                bg-ikbs-primary
-                px-5 py-3
-                text-sm font-semibold
-                text-white
-                shadow-sm
-                transition
-                hover:bg-ikbs-primary-dark
-              "
-            >
-              Accéder à l&apos;espace
-
-              <ArrowRight size={17} />
+                href={`${routes.login}?redirect=${encodeURIComponent(
+                    organisationRoutes.dashboard(
+                    organization.code,
+                    ),
+                )}`}
+                className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    bg-ikbs-primary
+                    px-5 py-3
+                    text-sm font-semibold
+                    text-white
+                    shadow-sm
+                    transition
+                    hover:bg-ikbs-primary-dark
+                "
+                >
+                Accéder à l&apos;espace
+                <ArrowRight size={17} />
             </Link>
           </div>
         </div>
@@ -482,9 +493,11 @@ export default async function OrganizationDetailsPage({
                 "
               >
                 <Link
-                  href={`/login?redirect=${encodeURIComponent(
-                    `/organisations/${organization.code}`,
-                  )}`}
+                  href={`${routes.login}?redirect=${encodeURIComponent(
+                    organisationRoutes.dashboard(
+                    organization.code,
+                    ),
+                )}`}
                   className="
                     flex w-full
                     items-center

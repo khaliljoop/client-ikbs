@@ -1,54 +1,74 @@
 import {
   CalendarDays,
   CircleDollarSign,
-  LayoutDashboard,
+  Gauge,
   Settings,
   ShieldCheck,
   Users,
   UsersRound,
 } from "lucide-react";
 
-export const organizationMenu = [
-  {
-    key: "dashboard",
-    label: "Tableau de bord",
-    icon: LayoutDashboard,
-    path: "",
-  },
-  {
-    key: "members",
-    label: "Membres",
-    icon: Users,
-    path: "/membres",
-  },
-  {
-    key: "contributions",
-    label: "Cotisations",
-    icon: CircleDollarSign,
-    path: "/cotisations",
-  },
-  {
-    key: "events",
-    label: "Événements",
-    icon: CalendarDays,
-    path: "/evenements",
-  },
-  {
-    key: "commissions",
-    label: "Commissions",
-    icon: UsersRound,
-    path: "/commissions",
-  },
-  {
-    key: "roles",
-    label: "Rôles & profils",
-    icon: ShieldCheck,
-    path: "/roles",
-  },
-  {
-    key: "settings",
-    label: "Paramètres",
-    icon: Settings,
-    path: "/parametres",
-  },
-] as const;
+import { organisationRoutes } from "@/config/routes";
+
+export function getOrganizationMenu(
+  organizationCode: string,
+) {
+  return [
+    {
+      key: "dashboard",
+      label: "Tableau de bord",
+      href: organisationRoutes.dashboard(
+        organizationCode,
+      ),
+      icon: Gauge,
+    },
+    {
+      key: "members",
+      label: "Membres",
+      href: organisationRoutes.members(
+        organizationCode,
+      ),
+      icon: Users,
+    },
+    {
+      key: "contributions",
+      label: "Cotisations",
+      href: organisationRoutes.contributions(
+        organizationCode,
+      ),
+      icon: CircleDollarSign,
+    },
+    {
+      key: "events",
+      label: "Événements",
+      href: organisationRoutes.events(
+        organizationCode,
+      ),
+      icon: CalendarDays,
+    },
+    {
+      key: "commissions",
+      label: "Commissions",
+      href: organisationRoutes.commissions(
+        organizationCode,
+      ),
+      icon: UsersRound,
+    },
+    {
+      key: "roles",
+      label: "Rôles",
+      href: organisationRoutes.roles(
+        organizationCode,
+      ),
+      icon: ShieldCheck,
+    },
+    {
+      key: "settings",
+      label: "Paramètres",
+      href: organisationRoutes.settings(
+        organizationCode,
+      ),
+      icon: Settings,
+    },
+  ];
+}

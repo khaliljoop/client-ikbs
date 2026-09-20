@@ -2,14 +2,13 @@
 
 import {
   Menu,
-  UserRound,
 } from "lucide-react";
 
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import OrganizationUserMenu from "@/features/organizations/components/OrganizationUserMenu";
 
 interface OrganizationHeaderProps {
   organizationName?: string;
-
   onOpenMenu: () => void;
 }
 
@@ -35,7 +34,9 @@ export default function OrganizationHeader({
         sm:px-6
       "
     >
+      {/* ========================= */}
       {/* LEFT */}
+      {/* ========================= */}
 
       <div
         className="
@@ -45,6 +46,8 @@ export default function OrganizationHeader({
           gap-3
         "
       >
+        {/* MENU MOBILE */}
+
         <button
           type="button"
           onClick={onOpenMenu}
@@ -69,8 +72,13 @@ export default function OrganizationHeader({
           aria-label="Ouvrir le menu"
           title="Menu"
         >
-          <Menu size={20} />
+          <Menu
+            size={20}
+            aria-hidden="true"
+          />
         </button>
+
+        {/* ORGANISATION */}
 
         <div className="min-w-0">
           <p
@@ -96,7 +104,9 @@ export default function OrganizationHeader({
         </div>
       </div>
 
+      {/* ========================= */}
       {/* RIGHT */}
+      {/* ========================= */}
 
       <div
         className="
@@ -105,31 +115,13 @@ export default function OrganizationHeader({
           gap-2
         "
       >
+        {/* THEME */}
+
         <ThemeToggle />
 
-        <button
-          type="button"
-          className="
-            inline-flex
-            h-10
-            w-10
-            items-center
-            justify-center
-            rounded-full
-            border
-            border-ikbs-border
-            bg-ikbs-card
-            text-foreground
-            transition
+        {/* UTILISATEUR CONNECTÉ */}
 
-            hover:border-ikbs-primary
-            hover:text-ikbs-primary
-          "
-          aria-label="Compte utilisateur"
-          title="Mon compte"
-        >
-          <UserRound size={18} />
-        </button>
+        <OrganizationUserMenu />
       </div>
     </header>
   );

@@ -1,7 +1,10 @@
+import Link from "next/link";
+
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Container from "@/components/ui/Container";
 import Section from "@/components/ui/Section";
+import { routes } from "@/config/routes";
 
 export default function HomePage() {
   return (
@@ -57,9 +60,11 @@ export default function HomePage() {
               Découvrir IKBS
             </Button>
 
-            <Button variant="outline">
-              Voir les organisations
-            </Button>
+            <Link href={routes.organisations}>
+              <Button variant="outline">
+                Voir les organisations
+              </Button>
+            </Link>
           </div>
         </div>
       </Container>
