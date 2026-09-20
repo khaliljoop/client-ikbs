@@ -54,11 +54,56 @@ export async function listOrganizations(
   );
 }
 
+export async function listPublicOrganizations(
+  params: ListOrganizationsParams = {},
+): Promise<OrganizationListResponse> {
+  const searchParams =
+    new URLSearchParams();
+
+  if (params.page !== undefined) {
+    searchParams.set(
+      "page",
+      String(params.page),
+    );
+  }
+
+  if (params.limit !== undefined) {
+    searchParams.set(
+      "limit",
+      String(params.limit),
+    );
+  }
+
+  if (params.search) {
+    searchParams.set(
+      "search",
+      params.search,
+    );
+  }
+
+  const query =
+    searchParams.toString();
+
+  return apiClient<OrganizationListResponse>(
+    `/organizations/public${
+      query ? `?${query}` : ""
+    }`,
+  );
+}
+
 export async function getOrganization(
   id: string,
 ): Promise<Organization> {
   return apiClient<Organization>(
     `/organizations/${id}`,
+  );
+}
+
+export async function getPublicOrganization(
+  code: string,
+): Promise<Organization> {
+  return apiClient<Organization>(
+    `/organizations/public/${encodeURIComponent(code)}`,
   );
 }
 

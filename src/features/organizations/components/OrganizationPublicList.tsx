@@ -55,11 +55,11 @@ export default function OrganizationPublicList({
       "
     >
       {organizations.map((organization) => (
-        <OrganizationPublicCard
-          key={organization.id}
-          organization={organization}
-        />
-      ))}
+      <OrganizationPublicCard
+        key={organization.code ?? `${new Date().getTime()}`}
+        organization={organization}
+      />
+    ))}
     </div>
   );
 }
