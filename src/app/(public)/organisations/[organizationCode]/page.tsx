@@ -1,10 +1,9 @@
+import { ApiError } from "@/lib/api/client";
+import { backendOrigin } from "@/lib/api/origin";
 import {
   ArrowLeft,
   ArrowRight,
   Building2,
-  Mail,
-  MapPin,
-  Phone,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -33,9 +32,11 @@ export default async function OrganizationDetailsPage({
     organization =
       await getPublicOrganization(
         organizationCode,
+        backendOrigin(),
       );
-  } catch {
-    notFound();
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
   }
 
   return (
@@ -159,21 +160,6 @@ export default async function OrganizationDetailsPage({
                   {organization.name}
                 </h1>
 
-                {organization.address && (
-                  <div
-                    className="
-                      mt-3
-                      flex items-center
-                      gap-2
-                      text-sm
-                      text-ikbs-muted
-                    "
-                  >
-                    <MapPin size={16} />
-
-                    {organization.address}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -365,124 +351,6 @@ export default async function OrganizationDetailsPage({
                 Coordonnées
               </h2>
 
-              <div className="mt-5 space-y-5">
-                {organization.email && (
-                  <div className="flex gap-3">
-                    <div
-                      className="
-                        flex h-9 w-9
-                        shrink-0
-                        items-center
-                        justify-center
-                        rounded-lg
-                        bg-ikbs-primary/10
-                        text-ikbs-primary
-                      "
-                    >
-                      <Mail size={17} />
-                    </div>
-
-                    <div className="min-w-0">
-                      <p
-                        className="
-                          text-xs
-                          text-ikbs-muted
-                        "
-                      >
-                        Email
-                      </p>
-
-                      <p
-                        className="
-                          mt-1 truncate
-                          text-sm font-medium
-                          text-foreground
-                        "
-                      >
-                        {organization.email}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {organization.phone && (
-                  <div className="flex gap-3">
-                    <div
-                      className="
-                        flex h-9 w-9
-                        shrink-0
-                        items-center
-                        justify-center
-                        rounded-lg
-                        bg-ikbs-primary/10
-                        text-ikbs-primary
-                      "
-                    >
-                      <Phone size={17} />
-                    </div>
-
-                    <div>
-                      <p
-                        className="
-                          text-xs
-                          text-ikbs-muted
-                        "
-                      >
-                        Téléphone
-                      </p>
-
-                      <p
-                        className="
-                          mt-1 text-sm
-                          font-medium
-                          text-foreground
-                        "
-                      >
-                        {organization.phone}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {organization.address && (
-                  <div className="flex gap-3">
-                    <div
-                      className="
-                        flex h-9 w-9
-                        shrink-0
-                        items-center
-                        justify-center
-                        rounded-lg
-                        bg-ikbs-primary/10
-                        text-ikbs-primary
-                      "
-                    >
-                      <MapPin size={17} />
-                    </div>
-
-                    <div>
-                      <p
-                        className="
-                          text-xs
-                          text-ikbs-muted
-                        "
-                      >
-                        Adresse
-                      </p>
-
-                      <p
-                        className="
-                          mt-1 text-sm
-                          font-medium
-                          text-foreground
-                        "
-                      >
-                        {organization.address}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
 
               <div
                 className="

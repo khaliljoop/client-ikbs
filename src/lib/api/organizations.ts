@@ -1,9 +1,10 @@
-import { apiClient } from "./client";
+import { ApiError, apiClient } from "./client";
 
 import type {
   Organization,
   OrganizationListResponse,
   OrganizationStatus,
+  PublicOrganization,
 } from "@/types/organization";
 
 export interface ListOrganizationsParams {
@@ -56,7 +57,7 @@ export async function listOrganizations(
 
 export async function listPublicOrganizations(
   params: ListOrganizationsParams = {},
-): Promise<OrganizationListResponse> {
+): Promise<OrganizationListResponse<PublicOrganization>> {
   const searchParams =
     new URLSearchParams();
 
@@ -84,7 +85,7 @@ export async function listPublicOrganizations(
   const query =
     searchParams.toString();
 
-  return apiClient<OrganizationListResponse>(
+  return apiClient<OrganizationListResponse<PublicOrganization>>(
     `/organizations/public${
       query ? `?${query}` : ""
     }`,
@@ -93,17 +94,22 @@ export async function listPublicOrganizations(
 
 export async function getOrganization(
   id: string,
+  options: RequestInit = {},
 ): Promise<Organization> {
   return apiClient<Organization>(
-    `/organizations/${id}`,
+    `/organizations/${encodeURIComponent(id)}`,
+    options,
   );
 }
 
 export async function getPublicOrganization(
   code: string,
-): Promise<Organization> {
-  return apiClient<Organization>(
+  origin = "",
+): Promise<PublicOrganization> {
+  return apiClient<PublicOrganization>(
     `/organizations/public/${encodeURIComponent(code)}`,
+    {},
+    origin,
   );
 }
 
@@ -124,7 +130,7 @@ export async function updateOrganization(
   data: UpdateOrganizationInput,
 ): Promise<Organization> {
   return apiClient<Organization>(
-    `/organizations/${id}`,
+    `/organizations/${encodeURIComponent(id)}`,
     {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -136,7 +142,7 @@ export async function changeOrganizationStatus(
   status: OrganizationStatus,
 ): Promise<Organization> {
   return apiClient<Organization>(
-    `/organizations/${id}/status`,
+    `/organizations/${encodeURIComponent(id)}/status`,
     {
       method: "PATCH",
       body: JSON.stringify({
@@ -150,9 +156,18 @@ export async function deleteOrganization(
   id: string,
 ): Promise<void> {
   await apiClient<void>(
-    `/organizations/${id}`,
+    `/organizations/${encodeURIComponent(id)}`,
     {
       method: "DELETE",
     },
   );
+}
+
+export function organizationErrorMessage(error: unknown, fallback = "Impossible de terminer cette opération. Réessayez.") {
+  if (error instanceof ApiError) {
+    if (error.status === 403) return "Votre compte ne peut pas effectuer cette action.";
+    if (error.status === 404) return "Cette organisation est introuvable ou inaccessible.";
+    if (error.status === 503) return "Le service des organisations est temporairement indisponible.";
+  }
+  return error instanceof Error ? error.message : fallback;
 }

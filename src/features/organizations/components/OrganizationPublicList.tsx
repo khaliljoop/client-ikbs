@@ -1,10 +1,10 @@
 import {Building2} from "lucide-react";
-import type { Organization } from "@/types/organization";
+import type { PublicOrganization } from "@/types/organization";
 
 import OrganizationPublicCard from "./OrganizationPublicCard";
 
 interface OrganizationPublicListProps {
-  organizations: Organization[];
+  organizations: PublicOrganization[];
   loading?: boolean;
 }
 

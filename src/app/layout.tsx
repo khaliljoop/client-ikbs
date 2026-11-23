@@ -1,3 +1,4 @@
+import LegacyAuthCleanup from "@/components/auth/LegacyAuthCleanup";
 // import type { Metadata } from "next";
 // import type { ReactNode } from "react";
 
@@ -64,6 +65,7 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <ToastProvider>
+            <LegacyAuthCleanup />
             {children}
           </ToastProvider>
         </ThemeProvider>

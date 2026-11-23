@@ -1,8 +1,9 @@
+import WorkspaceAccess from "@/components/auth/WorkspaceAccess";
 import type {
   ReactNode,
 } from "react";
 
-import OrganizationAuthGuard from "@/features/organizations/components/OrganizationAuthGuard";
+import SessionGate from "@/components/auth/SessionGate";
 import OrganizationShell from "@/components/layout/OrganizationShell";
 
 interface OrganizationLayoutProps {
@@ -22,18 +23,10 @@ export default async function OrganizationLayout({
   } = await params;
 
   return (
-    <OrganizationAuthGuard
-      organizationCode={
-        organizationCode
-      }
-    >
-      <OrganizationShell
-        organizationCode={
-          organizationCode
-        }
-      >
-        {children}
-      </OrganizationShell>
-    </OrganizationAuthGuard>
+    <SessionGate returnPath={"/espace/" + organizationCode}>
+      <WorkspaceAccess organizationCode={organizationCode}>
+        <OrganizationShell organizationCode={organizationCode}>{children}</OrganizationShell>
+      </WorkspaceAccess>
+    </SessionGate>
   );
 }

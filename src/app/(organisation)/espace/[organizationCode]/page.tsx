@@ -1,25 +1,8 @@
-export default function OrganizationDashboardPage() {
-  return (
-    <div>
-      <h1
-        className="
-          text-2xl
-          font-bold
-          text-foreground
-        "
-      >
-        Tableau de bord
-      </h1>
+import OrganizationWorkspace from "@/features/organizations/components/OrganizationWorkspace";
 
-      <p
-        className="
-          mt-2
-          text-sm
-          text-ikbs-muted
-        "
-      >
-        Vue générale de votre organisation.
-      </p>
-    </div>
-  );
+export default async function OrganizationDashboardPage({ params }: {
+  params: Promise<{ organizationCode: string }>;
+}) {
+  const { organizationCode } = await params;
+  return <OrganizationWorkspace code={organizationCode} />;
 }

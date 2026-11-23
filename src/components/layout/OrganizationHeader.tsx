@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 
 import ThemeToggle from "@/components/ui/ThemeToggle";
-import OrganizationUserMenu from "@/features/organizations/components/OrganizationUserMenu";
+import SessionUserMenu from "@/components/auth/SessionUserMenu";
 
 interface OrganizationHeaderProps {
   organizationName?: string;
@@ -121,7 +121,7 @@ export default function OrganizationHeader({
 
         {/* UTILISATEUR CONNECTÉ */}
 
-        <OrganizationUserMenu />
+        <SessionUserMenu />
       </div>
     </header>
   );

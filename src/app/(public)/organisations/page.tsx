@@ -16,13 +16,13 @@ import OrganizationPublicList from "@/features/organizations/components/Organiza
 import {
   listPublicOrganizations,
 } from "@/lib/api/organizations";
-import type { Organization } from "@/types/organization";
+import type { PublicOrganization } from "@/types/organization";
 
 export default function OrganizationsPage() {
   const [
     organizations,
     setOrganizations,
-  ] = useState<Organization[]>([]);
+  ] = useState<PublicOrganization[]>([]);
 
   const [search, setSearch] =
     useState("");

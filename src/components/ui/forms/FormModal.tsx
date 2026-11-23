@@ -27,6 +27,7 @@ interface FormModalProps {
   loading?: boolean;
 
   submitLabel?: string;
+  submitError?: string;
   cancelLabel?: string;
 
   onChange: (
@@ -48,6 +49,7 @@ export default function FormModal({
   columns = 1,
   loading = false,
   submitLabel = "Enregistrer",
+  submitError,
   cancelLabel = "Annuler",
   onChange,
   onSubmit,
@@ -86,6 +88,8 @@ export default function FormModal({
           columns={columns}
           onChange={onChange}
         />
+
+        {submitError && <p role="alert" className="text-sm text-red-600">{submitError}</p>}
 
         {/* ACTIONS */}
 

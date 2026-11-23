@@ -1,17 +1,13 @@
 import {
-  ArrowRight,
   Building2,
-  Mail,
-  MapPin,
-  Phone,
 } from "lucide-react";
 import Link from "next/link";
 
-import type { Organization } from "@/types/organization";
+import type { PublicOrganization } from "@/types/organization";
 import { organisationRoutes } from "@/config/routes";
 
 interface OrganizationPublicCardProps {
-  organization: Organization;
+  organization: PublicOrganization;
 }
 
 export default function OrganizationPublicCard({
@@ -111,78 +107,6 @@ export default function OrganizationPublicCard({
           {organization.description ||
             "Découvrez cette organisation et ses activités sur la plateforme IKBS."}
         </p>
-
-        {/* Contacts */}
-        <div
-          className="
-            mt-5 space-y-2.5
-            border-t border-ikbs-border
-            pt-4
-          "
-        >
-          {organization.address && (
-            <div
-              className="
-                flex items-start gap-2.5
-                text-sm text-ikbs-muted
-              "
-            >
-              <MapPin
-                size={16}
-                className="
-                  mt-0.5 shrink-0
-                  text-ikbs-primary
-                "
-              />
-
-              <span className="line-clamp-1">
-                {organization.address}
-              </span>
-            </div>
-          )}
-
-          {organization.phone && (
-            <div
-              className="
-                flex items-center gap-2.5
-                text-sm text-ikbs-muted
-              "
-            >
-              <Phone
-                size={16}
-                className="
-                  shrink-0
-                  text-ikbs-primary
-                "
-              />
-
-              <span>
-                {organization.phone}
-              </span>
-            </div>
-          )}
-
-          {organization.email && (
-            <div
-              className="
-                flex items-center gap-2.5
-                text-sm text-ikbs-muted
-              "
-            >
-              <Mail
-                size={16}
-                className="
-                  shrink-0
-                  text-ikbs-primary
-                "
-              />
-
-              <span className="truncate">
-                {organization.email}
-              </span>
-            </div>
-          )}
-        </div>
 
         {/* Footer */}
         <div className="mt-auto pt-6">

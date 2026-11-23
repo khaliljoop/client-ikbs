@@ -18,8 +18,10 @@ export interface Organization {
   updatedAt: string;
 }
 
-export interface OrganizationListResponse {
-  items: Organization[];
+export type PublicOrganization = Pick<Organization, "code" | "name" | "description" | "logoUrl"> & { status: "ACTIVE" };
+
+export interface OrganizationListResponse<T = Organization> {
+  items: T[];
   total: number;
   page: number;
   limit: number;

@@ -1,9 +1,10 @@
 "use client";
 
+import SessionUserMenu from "@/components/auth/SessionUserMenu";
+
 import {
   Bell,
   Menu,
-  UserRound,
 } from "lucide-react";
 
 import ThemeToggle from "@/components/ui/ThemeToggle";
@@ -91,32 +92,7 @@ export default function AdminHeader({
           />
         </button>
 
-        <button
-          type="button"
-          className="
-            flex items-center gap-2
-            rounded-lg
-            border border-ikbs-border
-            px-2.5 py-2
-            transition
-            hover:border-ikbs-primary
-          "
-        >
-          <UserRound
-            size={18}
-            className="text-ikbs-primary"
-          />
-
-          <span
-            className="
-              hidden text-sm font-medium
-              text-foreground
-              md:inline
-            "
-          >
-            Administrateur
-          </span>
-        </button>
+        <SessionUserMenu />
       </div>
     </header>
   );

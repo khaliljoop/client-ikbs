@@ -10,25 +10,16 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
-  useRouter,
-  useSearchParams,
-} from "next/navigation";
-import {
   FormEvent,
   useState,
 } from "react";
 
 import { routes } from "@/config/routes";
-import {
-  mockLogin,
-  saveMockUser,
-} from "@/lib/auth/mock-auth";
+import { authErrorMessage, login } from "@/lib/api/auth";
+import { postLoginPath } from "@/lib/auth/workspaces";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const [email, setEmail] =
+  const [identifier, setIdentifier] =
     useState("");
 
   const [password, setPassword] =
@@ -40,55 +31,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (
-  event: FormEvent<HTMLFormElement>,
-) => {
-  event.preventDefault();
-
-  setError("");
-  setLoading(true);
-
-  try {
-    const user = await mockLogin({
-      email,
-      password,
-    });
-
-    saveMockUser(user);
-
-    const redirect =searchParams.get("redirect");
-
-    // router.push(
-    //   redirect || routes.home,
-    // );
-    console.log(
-  "LOGIN URL actuelle:",
-  window.location.href,
-);
-
-console.log(
-  "LOGIN redirect param:",
-  redirect,
-);
-
-const target = redirect || routes.home;
-
-console.log(
-  "LOGIN destination:",
-  target,
-);
-
-router.replace(target);
-  } catch (err) {
-    setError(
-      err instanceof Error
-        ? err.message
-        : "Une erreur est survenue lors de la connexion.",
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (loading) return;
+    setError("");
+    setLoading(true);
+    try {
+      const profile = await login({ identifier, password });
+      setPassword("");
+      const redirect = new URLSearchParams(window.location.search).get("redirect");
+      window.location.replace(postLoginPath(profile, redirect));
+    } catch (error) {
+      setError(authErrorMessage(error, "login"));
+      setLoading(false);
+    }
+  };
 
   return (
     <section
@@ -215,7 +172,7 @@ router.replace(target);
 
               <div>
                 <label
-                  htmlFor="email"
+                  htmlFor="identifier"
                   className="
                     mb-2
                     block
@@ -224,7 +181,7 @@ router.replace(target);
                     text-foreground
                   "
                 >
-                  Adresse email
+                  Email ou nom d’utilisateur
                 </label>
 
                 <div className="relative">
@@ -242,14 +199,15 @@ router.replace(target);
                   />
 
                   <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="nom@exemple.com"
-                    value={email}
+                    id="identifier"
+                    name="identifier"
+                    type="text"
+                    autoComplete="username"
+                    maxLength={254}
+                    placeholder="Email ou nom d’utilisateur"
+                    value={identifier}
                     onChange={(event) =>
-                      setEmail(
+                      setIdentifier(
                         event.target.value,
                       )
                     }

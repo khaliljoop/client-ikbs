@@ -1,131 +1,54 @@
-// const API_URL = process.env.NEXT_PUBLIC_API_URL;
+export const CAPABILITIES_CHANGED_EVENT = "ikbs:capabilities-changed";
+export const SESSION_LOST_EVENT = "ikbs:session-lost";
 
-// if (!API_URL) {
-//   throw new Error(
-//     "NEXT_PUBLIC_API_URL n'est pas configurée.",
-//   );
-// }
-
-// interface RequestOptions extends RequestInit {
-//   token?: string;
-// }
-
-// export async function apiClient<T>(
-//   endpoint: string,
-//   options: RequestOptions = {},
-// ): Promise<T> {
-//   const { token, headers, ...fetchOptions } = options;
-
-//   const response = await fetch(
-//     `${API_URL}${endpoint}`,
-//     {
-//       ...fetchOptions,
-//       headers: {
-//         "Content-Type": "application/json",
-//         ...headers,
-//         ...(token
-//           ? {
-//               Authorization: `Bearer ${token}`,
-//             }
-//           : {}),
-//       },
-//     },
-//   );
-
-//   if (!response.ok) {
-//     const errorBody = await response
-//       .json()
-//       .catch(() => null);
-
-//     throw new Error(
-//       errorBody?.message ??
-//         `Erreur API : ${response.status} ${response.statusText}`,
-//     );
-//   }
-
-//   if (response.status === 204) {
-//     return undefined as T;
-//   }
-
-//   return response.json();
-// }
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL;
-
-if (!API_URL) {
-  throw new Error(
-    "NEXT_PUBLIC_API_URL n'est pas configurée.",
-  );
-}
-
-interface RequestOptions
-  extends RequestInit {
-  token?: string;
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string,
+    public readonly retryAfter: string | null = null,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
 }
 
 export async function apiClient<T>(
   endpoint: string,
-  options: RequestOptions = {},
+  options: RequestInit = {},
+  origin = "",
 ): Promise<T> {
-  const {
-    token,
+  const headers = new Headers(options.headers);
+  const method = (options.method ?? "GET").toUpperCase();
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    headers.set("X-IKBS-Request", "1");
+  }
+
+  const response = await fetch(origin + "/api/v1" + endpoint, {
+    ...options,
     headers,
-    ...fetchOptions
-  } = options;
-
-  const requestHeaders =
-    new Headers(headers);
-
-  /*
-   * On ajoute Content-Type uniquement
-   * lorsqu'une requête contient un body.
-   *
-   * GET / DELETE sans body n'ont donc
-   * pas Content-Type: application/json.
-   */
-  if (
-    fetchOptions.body &&
-    !requestHeaders.has(
-      "Content-Type",
-    )
-  ) {
-    requestHeaders.set(
-      "Content-Type",
-      "application/json",
-    );
-  }
-
-  if (token) {
-    requestHeaders.set(
-      "Authorization",
-      `Bearer ${token}`,
-    );
-  }
-
-  const response = await fetch(
-    `${API_URL}${endpoint}`,
-    {
-      ...fetchOptions,
-      headers: requestHeaders,
-    },
-  );
+    cache: "no-store",
+    credentials: "same-origin",
+    redirect: "error",
+  });
 
   if (!response.ok) {
-    const errorBody =
-      await response
-        .json()
-        .catch(() => null);
-
-    throw new Error(
-      errorBody?.message ??
-        `Erreur API : ${response.status} ${response.statusText}`,
-    );
+    const body: { error?: unknown; message?: unknown } | null = await response.json().catch(() => null);
+    const code = typeof body?.error === "string" ? body.error : "HTTP_" + response.status;
+    const message = typeof body?.message === "string" ? body.message : "Erreur API (" + response.status + ")";
+    if (typeof window !== "undefined" && response.status === 401 && !endpoint.startsWith("/auth/")) {
+      window.dispatchEvent(new Event(SESSION_LOST_EVENT));
+    }
+    if (typeof window !== "undefined" && endpoint.startsWith("/organizations") &&
+        !endpoint.startsWith("/organizations/public") && (response.status === 403 || response.status === 404)) {
+      window.dispatchEvent(new Event(CAPABILITIES_CHANGED_EVENT));
+    }
+    throw new ApiError(response.status, code, message, response.headers.get("Retry-After"));
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
+  if (response.status === 204) return undefined as T;
   return response.json();
 }

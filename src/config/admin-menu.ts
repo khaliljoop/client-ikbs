@@ -1,35 +1,7 @@
-import {
-  Building2,
-  ClipboardList,
-  LayoutDashboard,
-  Settings,
-  Users,
-} from "lucide-react";
+import { Building2, LayoutDashboard } from "lucide-react";
+import { globalOrganizationManagement } from "@/lib/auth/workspaces";
 
 export const adminMenu = [
-  {
-    label: "Tableau de bord",
-    href: "/dash",
-    icon: LayoutDashboard,
-  },
-  {
-    label: "Organisations",
-    href: "/dash/organisations",
-    icon: Building2,
-  },
-  {
-    label: "Demandes d'intégration",
-    href: "/dash/demandes",
-    icon: ClipboardList,
-  },
-  {
-    label: "Utilisateurs",
-    href: "/dash/utilisateurs",
-    icon: Users,
-  },
-  {
-    label: "Paramètres",
-    href: "/dash/parametres",
-    icon: Settings,
-  },
+  { label: "Tableau de bord", href: "/dash", icon: LayoutDashboard, permission: globalOrganizationManagement },
+  { label: "Organisations", href: "/dash/organisations", icon: Building2, permission: globalOrganizationManagement },
 ] as const;

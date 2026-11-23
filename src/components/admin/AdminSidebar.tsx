@@ -1,5 +1,7 @@
 "use client";
 
+import { useSession } from "@/components/auth/SessionProvider";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
@@ -16,6 +18,7 @@ export default function AdminSidebar({
   onClose,
 }: AdminSidebarProps) {
   const pathname = usePathname();
+  const { profile } = useSession();
 
   const isActive = (href: string) => {
     if (href === "/dash") {
@@ -125,7 +128,7 @@ export default function AdminSidebar({
             p-4
           "
         >
-          {adminMenu.map((item) => {
+          {adminMenu.filter(({ permission }) => profile.globalPermissions.includes(permission)).map((item) => {
             const Icon = item.icon;
             const active =
               isActive(item.href);

@@ -43,6 +43,7 @@ import {
   updateOrganization,
   changeOrganizationStatus,
   listOrganizations,
+  organizationErrorMessage,
   deleteOrganization,
 } from "@/lib/api/organizations";
 import ConfirmModal from "@/components/ui/modal/ConfirmModal";
@@ -227,9 +228,7 @@ const fetchOrganizations =
       setTotal(0);
 
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Impossible de récupérer les organisations.",
+        organizationErrorMessage(error, "Impossible de récupérer les organisations."),
         "Erreur",
       );
     } finally {
@@ -312,9 +311,7 @@ const handleChangeStatus = async () => {
     );
 
     toast.error(
-      error instanceof Error
-        ? error.message
-        : "Impossible de modifier le statut de l'organisation.",
+      organizationErrorMessage(error, "Impossible de modifier le statut de l'organisation."),
       "Erreur",
     );
   } finally {
@@ -359,9 +356,7 @@ const handleDelete = async () => {
     );
 
     toast.error(
-      error instanceof Error
-        ? error.message
-        : "Impossible de supprimer l'organisation.",
+      organizationErrorMessage(error, "Impossible de supprimer l'organisation."),
       "Erreur",
     );
   } finally {
@@ -463,9 +458,7 @@ const handleSubmit = async () => {
     );
 
     toast.error(
-      error instanceof Error
-        ? error.message
-        : "Une erreur est survenue pendant l'enregistrement.",
+      organizationErrorMessage(error, "Une erreur est survenue pendant l'enregistrement."),
       "Erreur",
     );
   } finally {

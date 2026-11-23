@@ -1,45 +1,30 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   ChevronDown,
   LogOut,
   UserRound,
 } from "lucide-react";
 import {
-  useRouter,
-} from "next/navigation";
-import {
   useEffect,
   useRef,
   useState,
 } from "react";
 
-import { routes } from "@/config/routes";
-import {
-  getMockUser,
-  removeMockUser,
-} from "@/lib/auth/mock-auth";
-import type {
-  MockUser,
-} from "@/mocks/auth";
+import { authErrorMessage } from "@/lib/api/auth";
+import { useSession } from "./SessionProvider";
 
-export default function OrganizationUserMenu() {
-  const router = useRouter();
+export default function SessionUserMenu() {
+  const { profile, signOut } = useSession();
 
   const menuRef =
     useRef<HTMLDivElement>(null);
 
-  const [user, setUser] =
-    useState<MockUser | null>(null);
-
-  const [open, setOpen] =
-    useState(false);
-
-  useEffect(() => {
-    setUser(
-      getMockUser(),
-    );
-  }, []);
+  const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const handleClickOutside = (
@@ -68,28 +53,20 @@ export default function OrganizationUserMenu() {
     };
   }, []);
 
-  const handleLogout = () => {
-    removeMockUser();
-
-    setOpen(false);
-
-    router.replace(
-      routes.login,
-    );
-
-    router.refresh();
+  const handleLogout = async () => {
+    setError("");
+    setSigningOut(true);
+    try {
+      await signOut();
+    } catch (error) {
+      setError(authErrorMessage(error, "logout"));
+      setSigningOut(false);
+    }
   };
 
-  if (!user) {
-    return null;
-  }
-
-  const fullName =
-    `${user.firstName} ${user.lastName}`.trim();
-
-  const initials =
-    `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`
-      .toUpperCase();
+  if (!profile) return null;
+  const fullName = profile.user.displayName;
+  const initials = fullName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 
   return (
     <div
@@ -146,28 +123,7 @@ export default function OrganizationUserMenu() {
             md:block
           "
         >
-          <p
-            className="
-              max-w-40
-              truncate
-              text-sm
-              font-semibold
-              text-foreground
-            "
-          >
-            {fullName}
-          </p>
-
-          <p
-            className="
-              max-w-40
-              truncate
-              text-xs
-              text-ikbs-muted
-            "
-          >
-            {user.email}
-          </p>
+          <p className="max-w-40 truncate text-sm font-semibold text-foreground">{fullName}</p>
         </div>
 
         <ChevronDown
@@ -215,56 +171,19 @@ export default function OrganizationUserMenu() {
               py-3
             "
           >
-            <p
-              className="
-                truncate
-                text-sm
-                font-semibold
-                text-foreground
-              "
-            >
-              {fullName}
-            </p>
-
-            <p
-              className="
-                mt-0.5
-                truncate
-                text-xs
-                text-ikbs-muted
-              "
-            >
-              {user.email}
-            </p>
-
-            <div className="mt-2">
-              <span
-                className="
-                  inline-flex
-                  rounded-full
-                  bg-ikbs-primary/10
-                  px-2.5
-                  py-1
-                  text-xs
-                  font-medium
-                  text-ikbs-primary
-                "
-              >
-                {user.role === "ORG_ADMIN"
-                  ? "Administrateur"
-                  : user.role === "SUPER_ADMIN"
-                    ? "Super administrateur"
-                    : "Membre"}
-              </span>
-            </div>
+            <p className="truncate text-sm font-semibold text-foreground">{fullName}</p>
           </div>
 
           {/* Actions */}
 
           <div className="p-2">
+            <Link href="/espaces" role="menuitem" onClick={() => setOpen(false)}
+              className="block rounded-lg px-3 py-2 text-sm hover:bg-ikbs-primary/10">Changer d’espace</Link>
+            {error && <p role="alert" className="px-3 py-2 text-sm text-red-600">{error}</p>}
             <button
               type="button"
               role="menuitem"
+              disabled={signingOut}
               onClick={
                 handleLogout
               }
@@ -293,7 +212,7 @@ export default function OrganizationUserMenu() {
               />
 
               <span>
-                Se déconnecter
+                {signingOut ? "Déconnexion…" : "Se déconnecter"}
               </span>
             </button>
           </div>

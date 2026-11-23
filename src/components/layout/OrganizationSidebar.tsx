@@ -1,4 +1,6 @@
 "use client";
+import { useSession } from "@/components/auth/SessionProvider";
+import { findWorkspace } from "@/lib/auth/workspaces";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -36,16 +38,15 @@ export default function OrganizationSidebar({
   onCloseMobile,
 }: OrganizationSidebarProps) {
   const pathname = usePathname();
+  const { profile } = useSession();
 
   const dashboardPath =
   organisationRoutes.dashboard(
     organizationCode,
   );
 
-const menuItems =
-  getOrganizationMenu(
-    organizationCode,
-  );
+  const permissions = findWorkspace(profile, organizationCode)?.permissions ?? [];
+  const menuItems = getOrganizationMenu(organizationCode).filter(({ permission }) => permissions.includes(permission));
 
   const isActive = (
   href: string,

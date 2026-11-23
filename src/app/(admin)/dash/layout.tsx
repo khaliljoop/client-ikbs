@@ -1,3 +1,5 @@
+import WorkspaceAccess from "@/components/auth/WorkspaceAccess";
+import SessionGate from "@/components/auth/SessionGate";
 import type { ReactNode } from "react";
 
 import AdminShell from "@/components/admin/AdminShell";
@@ -10,8 +12,8 @@ export default function AdminLayout({
   children,
 }: AdminLayoutProps) {
   return (
-    <AdminShell>
-      {children}
-    </AdminShell>
+    <SessionGate returnPath="/dash">
+      <WorkspaceAccess><AdminShell>{children}</AdminShell></WorkspaceAccess>
+    </SessionGate>
   );
 }

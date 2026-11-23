@@ -5,20 +5,22 @@ import {
   type ReactNode,
 } from "react";
 
+import { useSession } from "@/components/auth/SessionProvider";
+import { findWorkspace } from "@/lib/auth/workspaces";
 import OrganizationHeader from "./OrganizationHeader";
 import OrganizationSidebar from "./OrganizationSidebar";
 
 interface OrganizationShellProps {
   organizationCode: string;
-  organizationName?: string;
   children: ReactNode;
 }
 
 export default function OrganizationShell({
   organizationCode,
-  organizationName,
   children,
 }: OrganizationShellProps) {
+  const { profile } = useSession();
+  const organizationName = findWorkspace(profile, organizationCode)?.name;
   const [
     sidebarCollapsed,
     setSidebarCollapsed,
