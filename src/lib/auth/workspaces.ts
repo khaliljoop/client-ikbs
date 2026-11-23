@@ -4,7 +4,13 @@ import { safeReturnPath } from "./redirect";
 export const globalOrganizationManagement = "organizations.global.manage";
 export const organizationRead = "organization.read";
 export const organizationUpdate = "organization.profile.update";
+export const rolesManage = "roles.manage";
+export const rolesAssign = "roles.assign";
 export const workspacePath = "/espaces";
+
+export function hasWorkspacePermission(granted: readonly string[], required: readonly string[]) {
+  return required.some((permission) => granted.includes(permission));
+}
 
 export function canManageOrganizations(profile: SessionProfile) {
   return profile.globalPermissions.includes(globalOrganizationManagement);

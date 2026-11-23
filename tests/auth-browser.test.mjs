@@ -49,9 +49,11 @@ async function connectDebugger(socketUrl) {
   const socket = new WebSocket(socketUrl);
   await once(socket, "open");
   const calls = new Map();
+  const events = new Set();
   let counter = 0;
   socket.addEventListener("message", (event) => {
     const response = JSON.parse(event.data);
+    if (response.method) for (const listener of events) listener(response);
     const call = calls.get(response.id);
     if (!call) return;
     calls.delete(response.id);
@@ -60,6 +62,7 @@ async function connectDebugger(socketUrl) {
   });
   return {
     close: () => socket.close(),
+    onEvent: (listener) => events.add(listener),
     send(method, params = {}) {
       const id = ++counter;
       return new Promise((resolve, reject) => {
@@ -72,7 +75,7 @@ async function connectDebugger(socketUrl) {
 
 test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and logout", {
   skip: chrome ? false : "set IKBS_TEST_CHROME to a local Chrome or Chromium binary",
-  timeout: 150_000,
+  timeout: 200_000,
 }, async (context) => {
   const scratch = mkdtempSync(join(tmpdir(), "ikbs-chrome-"));
   context.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -84,6 +87,9 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
   const sessions = new Map();
   const seenMeCookies = [];
   const records = new Map();
+  const roles = new Map();
+  let rolePostCount = 0, rolePatchCount = 0, roleReads = 0;
+  let rolePost = "denied", rolePatch = "denied", roleRefreshFailure = false;
   let backendUnavailable = false;
   let localReadStatus = 200;
   let localEditStatus = 200;
@@ -94,6 +100,8 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
     ["fixture", { token: "b", globalPermissions: ["organizations.global.manage"], organizations: [], displayName: "Compte navigateur" }],
     ["multi", { token: "m", globalPermissions: [], organizations: [north, south], displayName: "Compte multi" }],
     ["local", { token: "l", globalPermissions: [], organizations: [north], displayName: "Compte local" }],
+    ["role-admin", { token: "r", globalPermissions: [], organizations: [{ ...north,
+      permissions: [...north.permissions, "roles.manage", "roles.assign"] }], displayName: "Role admin" }],
     ["empty", { token: "e", globalPermissions: [], organizations: [], displayName: "Compte sans espace" }],
   ]);
   let webOrigin;
@@ -139,6 +147,37 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
     }
     if (path.endsWith("/organizations/public/" + publicOrganization.code)) return send(200, publicOrganization);
     if (!sessions.has(token)) return failure(401, "SESSION_EXPIRED");
+    const roleBase = "/api/v1/organizations/north";
+    if (path === roleBase + "/role-permissions") return send(200, { permissions: ["organization.read", "members.write"] });
+    if (path === roleBase + "/memberships") return send(200, { items: [], total: 0, page: 1, limit: 15 });
+    if (path === roleBase + "/roles" || path.startsWith(roleBase + "/roles/")) {
+      if (method === "GET") {
+        roleReads++;
+        return roleRefreshFailure ? failure(503, "UNAVAILABLE") : send(200, { items: [...roles.values()] });
+      }
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      const input = JSON.parse(body);
+      if (method === "POST") {
+        rolePostCount++;
+        if (rolePost === "network") return response.destroy();
+        if (rolePost === "denied") return failure(409, "ORG_ROLE_CODE_EXISTS");
+        if (roles.has(input.code)) return failure(409, "ORG_ROLE_CODE_EXISTS");
+        const role = { ...input, id: input.code, organizationId: "north" };
+        roles.set(role.id, role);
+        return send(201, role);
+      }
+      if (method === "PATCH") {
+        rolePatchCount++;
+        if (rolePatch === "denied") return failure(403, "ORG_ROLE_PERMISSION_NOT_HELD");
+        assert.equal("code" in input, false);
+        assert.equal("permissions" in input, false);
+        const id = path.split("/").at(-1);
+        const saved = { ...roles.get(id), ...input };
+        roles.set(id, saved);
+        return send(200, saved);
+      }
+    }
     const orgId = path.split("/").at(-1);
     if (orgId === "north" || orgId === "south") {
       const organization = sessions.get(token).organizations.find((item) => item.id === orgId);
@@ -192,17 +231,30 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
   await waitUntil(async () => (await localHttps(webOrigin + "/login")).status === 200, "Next.js HTTPS did not start")
     .catch((error) => { throw new Error(logs, { cause: error }); });
 
+  let debugPort;
+  let browserLogs = "";
   const browser = spawn(chrome, ["--headless=new", "--remote-debugging-port=0", "--remote-debugging-address=127.0.0.1",
     "--user-data-dir=" + join(scratch, "chrome"), "--ignore-certificate-errors", "--no-first-run",
     "--no-default-browser-check", "--disable-background-networking", "--disable-component-update",
-    "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1", "about:blank"], { stdio: "ignore" });
+    "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+  browser.stderr.on("data", (chunk) => {
+    browserLogs = (browserLogs + chunk.toString()).slice(-8192);
+    debugPort ??= browserLogs.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//)?.[1];
+  });
   context.after(() => browser.kill());
-  const debuggerPort = await waitUntil(() => readFileSync(join(scratch, "chrome", "DevToolsActivePort"), "utf8").split("\n")[0],
+  const debuggerPort = await waitUntil(() => debugPort ?? readFileSync(join(scratch, "chrome", "DevToolsActivePort"), "utf8").split("\n")[0],
     "Chrome debugger did not start");
   const [target] = await fetch("http://127.0.0.1:" + debuggerPort + "/json/list").then((result) => result.json());
   const cdp = await connectDebugger(target.webSocketDebuggerUrl);
   context.after(() => cdp.close());
   await cdp.send("Page.enable");
+  await cdp.send("Runtime.enable");
+  const duplicateKeys = [];
+  cdp.onEvent((event) => {
+    if (event.method === "Runtime.consoleAPICalled" && event.params.args.some((arg) => String(arg.value).includes("same key"))) {
+      duplicateKeys.push(event.params.type);
+    }
+  });
   await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
   const evaluate = async (expression) => {
     const result = await cdp.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
@@ -359,4 +411,63 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
   await loginAs("empty");
   await waitUntil(() => bodyIncludes("aucun espace IKBS"), "Missing state for no memberships");
   assert.equal(await evaluate("location.pathname"), "/espaces");
+  await loginAs("role-admin");
+  await waitUntil(() => bodyIncludes("Fiche privée north"), "Role administrator session not loaded");
+  await navigate("/espace/N1234567/roles");
+  await waitUntil(() => bodyIncludes("Aucun rôle personnalisé"), "Roles did not load");
+  const field = (selector) => evaluate("document.querySelector(" + JSON.stringify(selector) + ")?.value");
+  const fillRoleField = async (selector, value) => {
+    await evaluate("(() => {const el=document.querySelector(" + JSON.stringify(selector) + ");" +
+      "Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el),'value').set.call(el," + JSON.stringify(value) +
+      "); el.dispatchEvent(new Event('input',{bubbles:true}));})()");
+    await waitUntil(async () => await field(selector) === value, "Role text field did not accept input", 5);
+  };
+  await clickLabel("Créer un rôle");
+  const roleName = '[role=dialog] input[name=name]';
+  const roleCode = '[role=dialog] input[name=code]';
+  const roleDescription = '[role=dialog] textarea[name=description]';
+  await waitUntil(() => evaluate("Boolean(document.querySelector(" + JSON.stringify(roleName) + "))"), "Create modal missing");
+  await fillRoleField(roleName, "Bureau test");
+  await fillRoleField(roleCode, "bureau-test");
+  await evaluate("document.querySelector('[role=dialog] input[type=checkbox]').click()");
+  await clickLabel("Enregistrer");
+  await waitUntil(() => bodyIncludes("Ce code est déjà utilisé"), "Missing duplicate role error");
+  assert.equal(await field(roleName), "Bureau test");
+  rolePost = "network";
+  await clickLabel("Enregistrer");
+  await waitUntil(() => bodyIncludes("Le service des rôles est indisponible"), "Missing transport failure feedback");
+  assert.equal(await field(roleCode), "bureau-test");
+  rolePost = "success";
+  roleRefreshFailure = true;
+  const readsBefore = roleReads;
+  await evaluate("(()=>{const save=document.querySelector('[role=dialog] button[type=submit]');save.click();save.click();})()");
+  await waitUntil(async () => roleReads > readsBefore && await bodyIncludes("Actualisation impossible"), "Refresh error not separated from POST success");
+  assert.equal(await evaluate("Boolean(document.querySelector('[role=dialog]'))"), false);
+  assert.ok(await bodyIncludes("Bureau test"));
+  assert.ok(await bodyIncludes("Rôle créé."));
+  assert.equal(rolePostCount, 3);
+  assert.equal(roles.size, 1);
+  roleRefreshFailure = false;
+  await clickLabel("Réessayer");
+  await waitUntil(async () => !(await bodyIncludes("Actualisation impossible")), "Roles GET retry failed");
+  await evaluate("document.querySelector('tbody tr button').click()");
+  await waitUntil(async () => await field(roleName) === "Bureau test", "Edit prefill missing");
+  assert.equal(await field(roleCode), "bureau-test");
+  assert.equal(await evaluate("document.querySelector('[role=dialog] input[name=code]').readOnly"), true);
+  await fillRoleField(roleName, "Bureau modifié");
+  await fillRoleField(roleDescription, "Description mise à jour");
+  await clickLabel("Enregistrer");
+  await waitUntil(() => bodyIncludes("ne peut plus être déléguée"), "Missing edit rejection");
+  assert.equal(await field(roleName), "Bureau modifié");
+  assert.equal(await field(roleDescription), "Description mise à jour");
+  rolePatch = "success";
+  await clickLabel("Enregistrer");
+  await waitUntil(async () => await bodyIncludes("Bureau modifié") &&
+    !(await evaluate("Boolean(document.querySelector('[role=dialog]'))")), "Edit did not close the modal");
+  assert.equal(rolePatchCount, 2);
+  await cdp.send("Page.reload");
+  await waitUntil(() => bodyIncludes("Description mise à jour"), "Edit did not survive the reload");
+  assert.deepEqual(roles.get("bureau-test").permissions, ["organization.read"]);
+  assert.deepEqual(duplicateKeys, []);
+
 });

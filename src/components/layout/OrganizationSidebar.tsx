@@ -1,6 +1,6 @@
 "use client";
 import { useSession } from "@/components/auth/SessionProvider";
-import { findWorkspace } from "@/lib/auth/workspaces";
+import { findWorkspace, hasWorkspacePermission } from "@/lib/auth/workspaces";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -46,7 +46,7 @@ export default function OrganizationSidebar({
   );
 
   const permissions = findWorkspace(profile, organizationCode)?.permissions ?? [];
-  const menuItems = getOrganizationMenu(organizationCode).filter(({ permission }) => permissions.includes(permission));
+  const menuItems = getOrganizationMenu(organizationCode).filter((item) => hasWorkspacePermission(permissions, item.permissions));
 
   const isActive = (
   href: string,
@@ -220,6 +220,7 @@ export default function OrganizationSidebar({
 
                 return (
                 <li key={item.key}>
+                    {item.section && <p className={`px-3 pb-1 pt-4 text-xs font-medium text-ikbs-muted ${collapsed ? "lg:sr-only" : ""}`}>{item.section}</p>}
                     <Link
                     href={item.href}
                     onClick={

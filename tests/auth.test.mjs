@@ -132,3 +132,19 @@ test("a removed or unreadable membership grants neither access nor edit", () => 
   assert.equal(findWorkspace(profile, north.code), undefined);
   assert.deepEqual(findWorkspace(profile, "s1234567")?.permissions, ["organization.read"]);
 });
+test("the roles menu follows server capabilities in the selected organization", () => {
+  const { findWorkspace, hasWorkspacePermission, rolesManage, rolesAssign } =
+    require(join(compiled, "lib/auth/workspaces.js"));
+  const enabled = ["organization.read", "organization.profile.update", "members.write", "roles.manage", "roles.assign"];
+  const profile = { organizations: [
+    { id: "admin", code: "D1000001", role: "ORGANIZATION_ADMIN", permissions: enabled },
+    { id: "member", code: "D1000002", role: "MEMBER", permissions: ["organization.read"] },
+    { id: "without-grant", code: "D1000003", role: "ORGANIZATION_ADMIN", permissions: ["organization.read"] },
+  ] };
+  const visible = (code) => hasWorkspacePermission(findWorkspace(profile, code)?.permissions ?? [], [rolesManage, rolesAssign]);
+  assert.equal(visible("D1000001"), true);
+  assert.equal(visible("D1000002"), false);
+  assert.equal(visible("D1000003"), false);
+  assert.equal(visible("D1000004"), false);
+  assert.equal(hasWorkspacePermission(["roles.assign"], [rolesManage, rolesAssign]), true);
+});
