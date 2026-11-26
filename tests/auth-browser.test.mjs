@@ -75,7 +75,7 @@ async function connectDebugger(socketUrl) {
 
 test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and logout", {
   skip: chrome ? false : "set IKBS_TEST_CHROME to a local Chrome or Chromium binary",
-  timeout: 200_000,
+  timeout: 240_000,
 }, async (context) => {
   const scratch = mkdtempSync(join(tmpdir(), "ikbs-chrome-"));
   context.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -88,6 +88,16 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
   const seenMeCookies = [];
   const records = new Map();
   const roles = new Map();
+  let organizationRequest;
+  const assignedRoles = new Set();
+  const linkedMemberId = "10000000-0000-4000-8000-000000000001";
+  const unlinkedMemberId = "10000000-0000-4000-8000-000000000002";
+  const eligibleMembership = { identityId: "eligible", displayName: "Compte à habiliter" };
+  let assignmentPosts = 0, assignmentDeletes = 0, directoryReads = 0, canAssignInApi = true;
+  const commissions = new Map();
+  let commissionPosts = 0, commissionRefreshFailure = false, commissionPostRefused = true;
+  const commissionWrites = [];
+  const commissionReads = [];
   let rolePostCount = 0, rolePatchCount = 0, roleReads = 0;
   let rolePost = "denied", rolePatch = "denied", roleRefreshFailure = false;
   let backendUnavailable = false;
@@ -101,8 +111,12 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
     ["multi", { token: "m", globalPermissions: [], organizations: [north, south], displayName: "Compte multi" }],
     ["local", { token: "l", globalPermissions: [], organizations: [north], displayName: "Compte local" }],
     ["role-admin", { token: "r", globalPermissions: [], organizations: [{ ...north,
-      permissions: [...north.permissions, "roles.manage", "roles.assign"] }], displayName: "Role admin" }],
+      permissions: [...north.permissions, "roles.manage", "roles.assign", "commissions.read", "commissions.manage"] }], displayName: "Role admin" }],
+    ["commission-reader", { token: "c", globalPermissions: [], organizations: [
+      { ...north, permissions: ["organization.read", "commissions.read"] }, south,
+    ], displayName: "Lecteur commissions" }],
     ["empty", { token: "e", globalPermissions: [], organizations: [], displayName: "Compte sans espace" }],
+    ["reviewer", { token: "q", globalPermissions: ["requests.platform.review"], organizations: [], displayName: "Compte instructeur" }],
   ]);
   let webOrigin;
   const backend = createServer(async (request, response) => {
@@ -116,6 +130,12 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
     const token = request.headers.cookie?.match(/(?:^|;\s*)__Host-ikbs_session=([A-Za-z0-9_-]{43})/)?.[1];
     if (method !== "GET" && (request.headers.origin !== webOrigin || request.headers["x-ikbs-request"] !== "1")) {
       return failure(403, "CSRF_REJECTED");
+    }
+    if (path.endsWith("/auth/password/reset") && method === "POST") {
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      assert.deepEqual(JSON.parse(body), { code: "synthetic-password-link", password: "synthetic-new-password" });
+      return send(204);
     }
     if (path.endsWith("/auth/login")) {
       let body = "";
@@ -146,10 +166,100 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
       return send(200, { items: [publicOrganization], total: 1, page: 1, limit: 9, totalPages: 1 });
     }
     if (path.endsWith("/organizations/public/" + publicOrganization.code)) return send(200, publicOrganization);
+    if (path === "/api/v1/membership-requests/public" && method === "POST") {
+      assert.equal(sessions.has(token), false);
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      organizationRequest = { ...JSON.parse(body), id: "request-fixture", reference: "DEM-2026-000001",
+        status: "PENDING", canProvision: false, organizationId: null,
+        createdAt: "2026-11-26T00:00:00Z" };
+      return send(202, { challengeId: "otp-fixture", expiresIn: 600 });
+    }
+    if (path === "/api/v1/membership-requests/public/verify" && method === "POST") {
+      assert.equal(sessions.has(token), false);
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      const { challengeId, otp } = JSON.parse(body);
+      if (challengeId !== "otp-fixture" || otp !== "123456") return failure(400, "REQUEST_EMAIL_CODE_INVALID");
+      return send(201, { reference: organizationRequest.reference, code: "z".repeat(32) });
+    }
+    if (path === "/api/v1/membership-requests/public/confirm-link" && method === "POST") {
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      assert.deepEqual(JSON.parse(body), { token: "synthetic-link-token" });
+      return send(201, { reference: "DEM-2026-000002", code: "y".repeat(32) });
+    }
+    if (path === "/api/v1/membership-requests/track" && method === "POST") {
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      const { reference, code } = JSON.parse(body);
+      if (reference !== organizationRequest?.reference || code !== "z".repeat(32)) {
+        return failure(404, "REQUEST_TRACKING_UNAVAILABLE");
+      }
+      return send(200, { reference, status: organizationRequest.status, createdAt: organizationRequest.createdAt, reviewedAt: null });
+    }
     if (!sessions.has(token)) return failure(401, "SESSION_EXPIRED");
+    if (path === "/api/v1/membership-requests/claim" && method === "POST") {
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      assert.deepEqual(JSON.parse(body), { reference: organizationRequest.reference, code: "z".repeat(32) });
+      organizationRequest.canProvision = true;
+      return send(204);
+    }
+    if (path.startsWith("/api/v1/membership-requests")) {
+      if (!sessions.get(token).globalPermissions.includes("requests.platform.review")) return failure(403, "FORBIDDEN");
+      if (path.endsWith("/approve") && method === "PATCH") {
+        organizationRequest = { ...organizationRequest, status: "APPROVED", organizationId: "created-organization" };
+        return send(200, organizationRequest);
+      }
+      const status = new URL(request.url, "http://127.0.0.1").searchParams.get("status");
+      const data = organizationRequest && (!status || organizationRequest.status === status) ? [organizationRequest] : [];
+      return send(200, { data, pagination: { total: data.length, totalPages: data.length } });
+    }
     const roleBase = "/api/v1/organizations/north";
+    if (path === roleBase + "/members") return send(200, { items: [
+      { id: linkedMemberId, firstName: "Membre", lastName: "Lié", code: "MBR-2026-000001", status: "ACTIVE" },
+      { id: unlinkedMemberId, firstName: "Membre", lastName: "Sans compte", code: "MBR-2026-000002", status: "ACTIVE" },
+    ], total: 2, page: 1, limit: 10 });
     if (path === roleBase + "/role-permissions") return send(200, { permissions: ["organization.read", "members.write"] });
-    if (path === roleBase + "/memberships") return send(200, { items: [], total: 0, page: 1, limit: 15 });
+    if (/\/(memberships|assignable-roles)(\/|$)/.test(path)) {
+      const organization = sessions.get(token).organizations.find(({ id }) => path.startsWith("/api/v1/organizations/" + id + "/"));
+      if (!organization) return failure(404, "ORGANIZATION_NOT_FOUND");
+      if (!organization.permissions.includes("roles.assign") || !canAssignInApi) return failure(403, "FORBIDDEN");
+      if (path === roleBase + "/memberships") {
+        directoryReads++;
+        const query = new URL(request.url, "http://127.0.0.1").searchParams;
+        const memberId = query.get("memberId");
+        const search = query.get("search") ?? "";
+        const page = Number(query.get("page") ?? 1);
+        const limit = Number(query.get("limit") ?? 15);
+        const items = (memberId ? (memberId === linkedMemberId ? [eligibleMembership] : []) :
+          [{ identityId: "role-admin", displayName: "Role admin" }, eligibleMembership, ...Array.from({ length: 118 },
+            (_, index) => ({ identityId: "fixture-" + index, displayName: "Compte " + index }))])
+          .filter(({ identityId, displayName }) => (identityId + " " + displayName).includes(search));
+        return send(200, { items: items.slice((page - 1) * limit, page * limit), total: items.length, page, limit });
+      }
+      if (path === roleBase + "/assignable-roles") return send(200, { items: [...roles.values()].map(({ id, name }) => ({ id, name })) });
+      const [, identityId, roleId] = path.match(/memberships\/([^/]+)\/roles(?:\/([^/]+))?$/) ?? [];
+      if (identityId === "role-admin") return method === "GET" ? send(200, { roleIds: [] }) : failure(403, "ROLE_SELF_ASSIGNMENT");
+      if (identityId !== "eligible") return failure(404, "ACTIVE_MEMBERSHIP_NOT_FOUND");
+      if (method === "GET") return send(200, { roleIds: [...assignedRoles] });
+      if (method === "POST") {
+        assignmentPosts++;
+        let body = "";
+        for await (const chunk of request) body += chunk;
+        const { roleId } = JSON.parse(body);
+        await delay(100);
+        if (assignedRoles.has(roleId)) return failure(409, "ROLE_ALREADY_ASSIGNED");
+        assignedRoles.add(roleId);
+        return send(201, { roleId });
+      }
+      if (method === "DELETE") {
+        assignmentDeletes++;
+        assignedRoles.delete(roleId);
+        return send(204);
+      }
+    }
     if (path === roleBase + "/roles" || path.startsWith(roleBase + "/roles/")) {
       if (method === "GET") {
         roleReads++;
@@ -177,6 +287,43 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
         roles.set(id, saved);
         return send(200, saved);
       }
+    }
+    const commissionBase = roleBase + "/commissions";
+    if (path === commissionBase || path.startsWith(commissionBase + "/")) {
+      if (method === "GET") {
+        const filters = new URL(request.url, "http://127.0.0.1").searchParams;
+        commissionReads.push(Object.fromEntries(filters));
+        if (commissionRefreshFailure) return response.destroy();
+        if (path !== commissionBase) return send(200, commissions.get(path.split("/").at(-1)));
+        const search = filters.get("search") ?? "";
+        const status = filters.get("status");
+        const page = Number(filters.get("page")), limit = Number(filters.get("limit"));
+        if (search === "Retard") await delay(900);
+        const rows = [...commissions.values()].filter((item) =>
+          (!status || status === item.status) && (search === "Page" || [item.name, item.description, item.code].join(" ").includes(search)));
+        const items = page === 1 ? rows.slice(0, limit) : [];
+        return send(200, { items, page, limit, total: search === "Page" ? 11 : rows.length, totalPages: search === "Page" ? 2 : Math.ceil(rows.length / limit) });
+      }
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      const input = JSON.parse(body);
+      commissionWrites.push({ method, path, input });
+      if (method === "POST") {
+        commissionPosts++;
+        if (commissionPostRefused) return failure(400, "INVALID_COMMISSION_INPUT");
+        const now = "2026-11-23T12:00:00.000Z";
+        const entity = { ...input, organizationId: "north", id: "commission", code: "COM-000001",
+          version: 1, status: "ACTIVE", createdAt: now, updatedAt: now, archivedAt: null };
+        commissions.set(entity.id, entity);
+        return send(201, entity);
+      }
+      const entity = commissions.get("commission");
+      if (input.version !== entity.version) return failure(409, "COMMISSION_VERSION_CONFLICT");
+      const archived = path.endsWith("/status");
+      const updated = { ...entity, ...input, version: entity.version + 1,
+        archivedAt: archived ? entity.updatedAt : null };
+      commissions.set(entity.id, updated);
+      return send(200, updated);
     }
     const orgId = path.split("/").at(-1);
     if (orgId === "north" || orgId === "south") {
@@ -411,6 +558,81 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
   await loginAs("empty");
   await waitUntil(() => bodyIncludes("aucun espace IKBS"), "Missing state for no memberships");
   assert.equal(await evaluate("location.pathname"), "/espaces");
+  await evaluate("fetch('/api/v1/auth/logout',{method:'POST',headers:{'X-IKBS-Request':'1'}})");
+  await navigate("/proposer-organisation");
+  await waitUntil(() => bodyIncludes("Recevoir un code par e-mail"), "Request form missing");
+  await delay(400);
+  await evaluate(`(() => {
+    for (const [name,value] of Object.entries({firstName:"Awa",lastName:"Démo",email:"applicant@example.test",
+      organizationName:"Organisation demandée",organizationObjective:"Former les adhérents."})) {
+      document.querySelector('[name='+name+']').value=value;
+    }
+    document.querySelector('button[type=submit]').click();
+  })()`);
+  await waitUntil(() => bodyIncludes("Vérifier et déposer"), "OTP form missing");
+  assert.equal(await bodyIncludes("DEM-2026-000001"), false);
+  await evaluate("document.querySelector('[name=otp]').value='000000'");
+  await clickLabel("Vérifier et déposer");
+  await waitUntil(() => bodyIncludes("Code invalide ou expiré"), "Invalid OTP feedback missing");
+  await evaluate("document.querySelector('[name=otp]').value='123456'");
+  await clickLabel("Vérifier et déposer");
+  await waitUntil(() => bodyIncludes("DEM-2026-000001"), "Request reference missing");
+  assert.ok(await bodyIncludes("z".repeat(32)));
+  await clickLabel("Suivre ma demande", 'a[href="/suivre-demande"]');
+  await waitUntil(() => bodyIncludes("Consulter le statut"), "Public tracking form missing");
+  const fillTracking = (code) => evaluate(`(() => {
+    document.querySelector('[name=reference]').value='DEM-2026-000001';
+    document.querySelector('[name=code]').value=${JSON.stringify(code)};
+    document.querySelector('button[type=submit]').click();
+  })()`);
+  await fillTracking("x".repeat(32));
+  await waitUntil(() => bodyIncludes("Demande introuvable"), "Wrong tracking code feedback missing");
+  await fillTracking("z".repeat(32));
+  await waitUntil(() => bodyIncludes("En attente de traitement"), "Public tracking status missing");
+  await loginAs("empty");
+  await waitUntil(() => evaluate("location.pathname === '/espaces'"), "Applicant login missing");
+  await navigate("/rattacher-demande");
+  await waitUntil(() => bodyIncludes("Confirmer le rattachement"), "Link form missing");
+  await delay(400);
+  await evaluate(`(() => {
+    document.querySelector('[name=reference]').value='DEM-2026-000001';
+    document.querySelector('[name=code]').value='z'.repeat(32);
+    document.querySelector('button[type=submit]').click();
+  })()`);
+  await waitUntil(() => bodyIncludes("La demande est rattachée"), "Linked request feedback missing");
+  await navigate("/dash/demandes");
+  await waitUntil(() => bodyIncludes("Accès refusé"), "Applicant accessed global review");
+  await loginAs("reviewer");
+  await waitUntil(() => bodyIncludes("DEM-2026-000001"), "Review-only account did not find pending request");
+  assert.equal(await evaluate("location.pathname"), "/dash/demandes");
+  await clickLabel("DEM-2026-000001");
+  await waitUntil(() => bodyIncludes("Former les adhérents."), "Request details missing");
+  await clickLabel("Approuver");
+  await clickLabel("Confirmer l’approbation");
+  await waitUntil(() => bodyIncludes("L’organisation a été créée."), "Approval feedback missing");
+  assert.equal(organizationRequest.status, "APPROVED");
+  await navigate("/valider-demande#synthetic-link-token");
+  await waitUntil(() => bodyIncludes("Confirmer ma demande"), "Email confirmation page missing");
+  await waitUntil(async () => {
+    if (await bodyIncludes("DEM-2026-000002")) return true;
+    await clickLabel("Confirmer ma demande");
+    return false;
+  }, "Direct confirmation did not display a receipt");
+  assert.equal(await evaluate("location.hash"), "");
+  await navigate("/choisir-mot-de-passe#synthetic-password-link");
+  await waitUntil(() => evaluate("!document.querySelector('fieldset')?.disabled && !!document.querySelector('[name=confirmPassword]')"), "Password setup form missing");
+  await evaluate(`(() => {
+    document.querySelector('[name=password]').value='synthetic-new-password';
+    document.querySelector('[name=confirmPassword]').value='synthetic-other-password';
+    document.querySelector('button[type=submit]').click();
+  })()`);
+  await waitUntil(() => bodyIncludes("doivent être identiques"), "Password confirmation feedback missing");
+  await evaluate(`(() => {
+    document.querySelector('[name=confirmPassword]').value='synthetic-new-password';
+    document.querySelector('button[type=submit]').click();
+  })()`);
+  await waitUntil(() => bodyIncludes("Mot de passe enregistré"), "Password reset completion missing");
+  assert.equal(await evaluate("location.hash"), "");
   await loginAs("role-admin");
   await waitUntil(() => bodyIncludes("Fiche privée north"), "Role administrator session not loaded");
   await navigate("/espace/N1234567/roles");
@@ -468,6 +690,164 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
   await cdp.send("Page.reload");
   await waitUntil(() => bodyIncludes("Description mise à jour"), "Edit did not survive the reload");
   assert.deepEqual(roles.get("bureau-test").permissions, ["organization.read"]);
+  assert.deepEqual(duplicateKeys, []);
+
+  const assignmentBase = "/api/v1/organizations/north";
+  await waitUntil(() => bodyIncludes("Sélectionnez une appartenance active"), "Assignment guidance missing");
+  await clickLabel("Affecter des rôles", 'a[href="#affectations"]');
+  await waitUntil(() => evaluate("location.hash === '#affectations'"), "Assignment shortcut did not navigate");
+  assert.ok(await bodyIncludes("1–15 sur 120"));
+  await clickLabel("Suivant");
+  await waitUntil(() => bodyIncludes("16–30 sur 120"), "Second directory page missing");
+  await evaluate("(()=>{const select=document.querySelector('[aria-label=\"Pagination des appartenances\"] select');select.value='50';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await waitUntil(() => bodyIncludes("1–50 sur 120"), "Page-size change should reset directory pagination");
+  const chooseMembership = (identityId) => evaluate("[...document.querySelectorAll('#affectations button[aria-pressed]')]" +
+    ".find(button => button.textContent.includes(" + JSON.stringify(identityId) + "))?.click()");
+  await chooseMembership("role-admin");
+  await waitUntil(() => bodyIncludes("Vous ne pouvez pas vous attribuer un rôle."), "Self-assignment message missing");
+  assert.equal(await evaluate("!!document.querySelector('#affectations section select')"), false);
+  await chooseMembership("eligible");
+  await waitUntil(() => evaluate("!!document.querySelector('#affectations option[value=bureau-test]')"), "Assignable role missing");
+  await evaluate("(()=>{const select=document.querySelector('#affectations section select');select.value='bureau-test';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await evaluate("(()=>{const submit=document.querySelector('#affectations section form button[type=submit]');submit.click();submit.click();})()");
+  const removeAssignment = '[aria-label="Retirer Bureau modifié"]';
+  await waitUntil(() => evaluate("!!document.querySelector(" + JSON.stringify(removeAssignment) + ")"), "Assigned role not displayed");
+  assert.equal(assignmentPosts, 1);
+  await evaluate("document.querySelector(" + JSON.stringify(removeAssignment) + ").click()");
+  await clickLabel("Confirmer le retrait");
+  await waitUntil(() => bodyIncludes("Aucun rôle personnalisé attribué."), "Removed role remained visible");
+  assert.equal(assignmentDeletes, 1);
+  await navigate("/espace/N1234567/membres");
+  await waitUntil(() => bodyIncludes("Membre Lié"), "Member list missing");
+  await evaluate("document.querySelector('a[href*=" + JSON.stringify("memberId=" + linkedMemberId) + "]').click()");
+  await waitUntil(() => evaluate("!!document.querySelector('option[value=bureau-test]')"), "Exact membership lookup from members failed");
+  assert.ok(await bodyIncludes("Compte à habiliter"));
+  await navigate("/espace/N1234567/roles?memberId=" + unlinkedMemberId);
+  await waitUntil(() => bodyIncludes("n’est associé à cette fiche"), "Unlinked member feedback missing");
+  assert.equal(await evaluate("!!document.querySelector('option[value=bureau-test]')"), false);
+  await navigate("/espace/N1234567/roles");
+  await waitUntil(() => bodyIncludes("Compte à habiliter"), "Directory unavailable after returning");
+  await chooseMembership("eligible");
+  await waitUntil(() => bodyIncludes("Actualiser les affectations"), "Assignment panel unavailable");
+  assert.equal(await evaluate("fetch('/api/v1/organizations/south/memberships').then(r=>r.status)"), 404);
+  assert.equal(await evaluate("fetch(" + JSON.stringify(assignmentBase + "/memberships/inactive/roles") + ").then(r=>r.status)"), 404);
+  canAssignInApi = false;
+  await clickLabel("Actualiser les affectations");
+  await waitUntil(() => bodyIncludes("Votre compte ne peut pas effectuer cette opération."), "Assignment 403 missing");
+  canAssignInApi = true;
+  const activeRoleSession = sessions.get("r".repeat(43));
+  sessions.set("r".repeat(43), { ...activeRoleSession, organizations: activeRoleSession.organizations.map((organization) =>
+    ({ ...organization, permissions: organization.permissions.filter((permission) => permission !== "roles.assign") })) });
+  await evaluate("window.dispatchEvent(new Event('ikbs:capabilities-changed'))");
+  await waitUntil(() => evaluate("!document.querySelector('#affectations') && !document.querySelector('a[href=\"#affectations\"]')"), "Revoked assignment permission remained visible");
+  const readsAfterRevocation = directoryReads;
+  await navigate("/espace/N1234567/roles");
+  await waitUntil(() => bodyIncludes("Bureau modifié"), "Role definitions unavailable after assignment revocation");
+  assert.equal(directoryReads, readsAfterRevocation);
+  assert.deepEqual(duplicateKeys, []);
+
+  await navigate("/espace/N1234567/commissions");
+  await waitUntil(() => bodyIncludes("Aucune commission"), "Commission empty state missing");
+  await clickLabel("Nouvelle commission");
+  const commissionName = '[role=dialog] input[name=name]';
+  const commissionDescription = '[role=dialog] textarea[name=description]';
+  await waitUntil(async () => (await field(commissionName)) === "", "Commission form not displayed");
+  assert.equal(await evaluate("!!document.querySelector('[role=dialog] input[name=code]')"), false);
+  await fillRoleField(commissionName, "   ");
+  await clickLabel("Enregistrer");
+  await waitUntil(() => bodyIncludes("Le nom doit contenir"), "Missing validation for blank commission name");
+  assert.equal(commissionPosts, 0);
+  await fillRoleField(commissionName, "Commission locale");
+  await clickLabel("Enregistrer");
+  await waitUntil(() => bodyIncludes("Vérifiez les champs"), "Missing failed POST feedback");
+  assert.equal(await field(commissionName), "Commission locale");
+  commissionPostRefused = false;
+  commissionRefreshFailure = true;
+  await evaluate("(()=>{const save=document.querySelector('[role=dialog] button[type=submit]');save.click();save.click();})()");
+  await waitUntil(() => bodyIncludes("Actualisation impossible"), "Missing commission refresh error");
+  assert.ok(await bodyIncludes("COM-000001"));
+  assert.equal(await evaluate("!!document.querySelector('[role=dialog]')"), false);
+  assert.equal(commissionPosts, 2);
+  assert.deepEqual(commissionWrites.at(-1).input, { name: "Commission locale", description: null });
+  commissionRefreshFailure = false;
+  await clickLabel("Réessayer");
+  await waitUntil(async () => !(await bodyIncludes("Actualisation impossible")), "Commission retry failed");
+  await evaluate("document.querySelector('button[aria-label=\"Modifier la commission\"]').click()");
+  await waitUntil(async () => await field(commissionName) === "Commission locale", "Edit prefill missing");
+  await fillRoleField(commissionName, "Commission modifiée");
+  await fillRoleField(commissionDescription, "Description persistée");
+  commissions.get("commission").version = 2;
+  await clickLabel("Enregistrer");
+  await waitUntil(() => bodyIncludes("Votre brouillon est conservé"), "Missing commission conflict state");
+  assert.deepEqual(commissionWrites.at(-1).input, { name: "Commission modifiée", description: "Description persistée", version: 1 });
+  assert.equal(await field(commissionName), "Commission modifiée");
+  const beforeConflict = commissionWrites.length;
+  await clickLabel("Relire la commission");
+  await waitUntil(() => bodyIncludes("Version 2 sur le serveur"), "Missing comparison after reread");
+  assert.equal(commissionWrites.length, beforeConflict);
+  await clickLabel("Adopter cette version de référence");
+  await clickLabel("Enregistrer");
+  await waitUntil(async () => await bodyIncludes("Commission modifiée") && !await evaluate("!!document.querySelector('[role=dialog]')"), "Commission edit failed");
+  assert.equal(commissionWrites.at(-1).input.version, 2);
+  await cdp.send("Page.reload");
+  await waitUntil(() => bodyIncludes("Description persistée"), "Commission description did not persist");
+  const searchCommission = async (value) => {
+    await fillRoleField('input[type=search]', value);
+    await clickLabel("Rechercher");
+  };
+  await searchCommission("Page");
+  await waitUntil(() => bodyIncludes("Page 1 / 2"), "Server totalPages ignored");
+  await clickLabel("Suivant");
+  await waitUntil(() => commissionReads.some(({ page, search }) => page === "2" && search === "Page"), "Server page 2 not requested");
+  await searchCommission("Retard");
+  await waitUntil(() => commissionReads.some(({ search }) => search === "Retard"), "Delayed query not requested");
+  await searchCommission("Commission");
+  await waitUntil(() => bodyIncludes("Description persistée"), "Search did not load matching commission");
+  await delay(1000);
+  assert.ok(await bodyIncludes("Description persistée"), "Outdated reply replaced current search");
+  const toggleStatus = async (value) => evaluate("(()=>{const el=[...document.querySelectorAll('select')].find(s=>[...s.options].some(o=>o.value==='ARCHIVED'));el.value="+JSON.stringify(value)+";el.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  const clickArchive = () => evaluate("document.querySelector('button[aria-label=\"Archiver la commission\"]').click()");
+  await clickArchive();
+  await waitUntil(() => bodyIncludes("ne pourra plus être modifiée ni réactivée"), "Missing archive confirmation");
+  const beforeArchive = commissionWrites.length;
+  await clickLabel("Annuler");
+  assert.equal(commissionWrites.length, beforeArchive);
+  await clickArchive();
+  await waitUntil(() => bodyIncludes("Confirmer l’archivage"), "Archive confirmation missing");
+  commissions.get("commission").version = 4;
+  await clickLabel("Confirmer l’archivage");
+  await waitUntil(() => bodyIncludes("Relire le registre"), "Archive version conflict not shown");
+  assert.equal(commissionWrites.length, beforeArchive + 1);
+  await clickLabel("Relire le registre");
+  await waitUntil(async () => !(await bodyIncludes("Relire le registre")), "Archive reread failed");
+  await waitUntil(async () => {
+    await clickArchive();
+    return bodyIncludes("Confirmer l’archivage");
+  }, "Archive could not be retried after an explicit refresh");
+  await clickLabel("Confirmer l’archivage");
+  await waitUntil(() => bodyIncludes("Commission archivée."), "Missing archive notification");
+  assert.deepEqual(commissionWrites.at(-1).input, { status: "ARCHIVED", version: 4 });
+  await toggleStatus("ARCHIVED");
+  await waitUntil(() => commissionReads.some(({ status, page }) => status === "ARCHIVED" && page === "1"), "Archive filter not sent");
+  await waitUntil(() => bodyIncludes("Description persistée"), "Archived commission missing");
+  assert.equal(await evaluate("!!document.querySelector('button[aria-label=\"Modifier la commission\"]')"), false);
+  assert.equal(await bodyIncludes("Réactiver"), false);
+  await evaluate("document.querySelector('button[aria-label=\"Consulter la commission\"]').click()");
+  await waitUntil(() => bodyIncludes("Archivage (UTC)"), "Archived detail missing");
+
+  await loginAs("commission-reader");
+  await waitUntil(() => bodyIncludes("Mes espaces"), "Commission reader workspace picker missing");
+  await navigate("/espace/N1234567/commissions");
+  await waitUntil(() => bodyIncludes("Description persistée"), "Reader could not view archived commission");
+  assert.ok(await evaluate("!!document.querySelector('nav a[href=\"/espace/N1234567/commissions\"]')"));
+  assert.equal(await bodyIncludes("Nouvelle commission"), false);
+  assert.equal(await evaluate("!!document.querySelector('button[aria-label=\"Archiver la commission\"]')"), false);
+  const readsBeforeSouth = commissionReads.length;
+  await navigate("/espace/S1234567/commissions");
+  await waitUntil(() => bodyIncludes("Espace indisponible"), "Unprivileged organization route not blocked");
+  assert.equal(await bodyIncludes("Description persistée"), false);
+  assert.equal(await evaluate("!!document.querySelector('nav a[href=\"/espace/S1234567/commissions\"]')"), false);
+  assert.equal(commissionReads.length, readsBeforeSouth);
   assert.deepEqual(duplicateKeys, []);
 
 });

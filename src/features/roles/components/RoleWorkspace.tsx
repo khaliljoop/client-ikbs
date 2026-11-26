@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Pencil, Trash2 } from "lucide-react";
 import { useSession } from "@/components/auth/SessionProvider";
 import { WorkspaceUnavailable } from "@/components/auth/WorkspaceAccess";
@@ -9,7 +10,8 @@ import DataTable from "@/components/ui/table/DataTable";
 import { useToast } from "@/components/ui/toast/ToastProvider";
 import { deleteRole, listDelegableRolePermissions, listRoles, roleErrorMessage, type OrganizationRole } from "@/lib/api/roles";
 import { findWorkspace, rolesAssign, rolesManage } from "@/lib/auth/workspaces";
-import RoleAssignments from "./RoleAssignments";
+import { organisationRoutes } from "@/config/routes";
+import RoleAssignments, { MemberRoleAssignment } from "./RoleAssignments";
 import RoleForm, { rolePermissionLabel } from "./RoleForm";
 
 type RoleData = { roles: OrganizationRole[]; delegable: string[] };
@@ -63,9 +65,9 @@ function RoleDefinitions({ organizationId, onChange }: { organizationId: string;
     }
   }
 
-  return <section className="space-y-4">
+  return <section id="roles-personnalises" tabIndex={-1} aria-labelledby="role-definitions-title" className="scroll-mt-24 space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <h2 className="text-xl font-semibold">Rôles personnalisés</h2>
+      <h2 id="role-definitions-title" className="text-xl font-semibold">Rôles personnalisés</h2>
       {data && <button type="button" onClick={() => setEditing(null)}
         className="rounded-lg bg-ikbs-primary px-4 py-2 font-medium text-white">Créer un rôle</button>}
     </div>
@@ -114,19 +116,34 @@ function RoleDefinitions({ organizationId, onChange }: { organizationId: string;
   </section>;
 }
 
-export default function RoleWorkspace({ code }: { code: string }) {
+export default function RoleWorkspace({ code, memberId }: { code: string; memberId?: string }) {
   const { profile } = useSession();
   const [revision, setRevision] = useState(0);
   const workspace = findWorkspace(profile, code);
   if (!workspace) return <WorkspaceUnavailable kind="local" />;
   const canManage = workspace.permissions.includes(rolesManage);
   const canAssign = workspace.permissions.includes(rolesAssign);
+  const assignmentKey = profile.user.id + ":" + workspace.id;
+  if (memberId) return <section className="min-w-0 space-y-4">
+    <nav aria-label="Retour" className="flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium text-ikbs-primary">
+      <Link href={organisationRoutes.members(workspace.code)}>Retour aux membres</Link>
+      <Link href={organisationRoutes.roles(workspace.code)}>Toutes les affectations</Link>
+    </nav>
+    <h1 className="text-2xl font-bold">Rôles du membre</h1>
+    {canAssign ? <MemberRoleAssignment key={assignmentKey + ":" + memberId} organizationId={workspace.id}
+      actorId={profile.user.id} memberId={memberId} />
+      : <p role="alert">Votre compte ne peut pas affecter des rôles dans cette organisation.</p>}
+  </section>;
   return <section className="min-w-0 space-y-6">
     <h1 className="text-2xl font-bold">Rôles et habilitations</h1>
     {!canManage && !canAssign && <p role="alert">Votre compte ne dispose pas des droits nécessaires dans cette organisation.</p>}
+    {canManage && canAssign && <a href="#affectations"
+      className="inline-flex rounded-lg border border-ikbs-border px-4 py-2 text-sm font-medium text-ikbs-primary hover:bg-ikbs-primary/5">
+      Affecter des rôles
+    </a>}
     {canManage && <RoleDefinitions key={"definitions:" + profile.user.id + ":" + workspace.id} organizationId={workspace.id}
       onChange={() => setRevision((value) => value + 1)} />}
-    {canAssign && <RoleAssignments key={"assignments:" + profile.user.id + ":" + workspace.id} actorId={profile.user.id}
-      organizationId={workspace.id} revision={revision} />}
+    {canAssign && <RoleAssignments key={"assignments:" + assignmentKey} actorId={profile.user.id}
+      organizationId={workspace.id} revision={revision} canManage={canManage} />}
   </section>;
 }

@@ -35,6 +35,7 @@ export default function PublicHeader() {
 
         {/* Navigation desktop */}
         <div className="hidden items-center gap-6 md:flex">
+          <Link href="/proposer-organisation" className="text-sm font-medium hover:text-ikbs-primary">Proposer une organisation</Link>
           <Link
             href={routes.home}
             className="

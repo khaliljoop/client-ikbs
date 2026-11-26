@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { canManageOrganizations, findWorkspace, workspacePath } from "@/lib/auth/workspaces";
+import { canManageOrganizations, findWorkspace, requestReview, workspacePath } from "@/lib/auth/workspaces";
 import { useSession } from "./SessionProvider";
 
 export function WorkspaceUnavailable({ kind }: { kind: "global" | "local" }) {
@@ -18,13 +18,14 @@ export function WorkspaceUnavailable({ kind }: { kind: "global" | "local" }) {
   );
 }
 
-export default function WorkspaceAccess({ children, organizationCode }: {
+export default function WorkspaceAccess({ children, organizationCode, allowReview = false }: {
   children: ReactNode;
   organizationCode?: string;
+  allowReview?: boolean;
 }) {
   const { profile } = useSession();
   if (organizationCode !== undefined) {
     return findWorkspace(profile, organizationCode) ? children : <WorkspaceUnavailable kind="local" />;
   }
-  return canManageOrganizations(profile) ? children : <WorkspaceUnavailable kind="global" />;
+  return (canManageOrganizations(profile) || (allowReview && profile.globalPermissions.includes(requestReview))) ? children : <WorkspaceUnavailable kind="global" />;
 }

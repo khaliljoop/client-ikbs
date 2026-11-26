@@ -13,7 +13,7 @@ export default function AdminLayout({
 }: AdminLayoutProps) {
   return (
     <SessionGate returnPath="/dash">
-      <WorkspaceAccess><AdminShell>{children}</AdminShell></WorkspaceAccess>
+      <WorkspaceAccess allowReview><AdminShell>{children}</AdminShell></WorkspaceAccess>
     </SessionGate>
   );
 }

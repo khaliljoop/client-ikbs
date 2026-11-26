@@ -22,7 +22,7 @@ export default function DataTable<T extends object>({
   };
 
   const totalPages = pagination
-    ? Math.ceil(
+    ? pagination.totalPages ?? Math.ceil(
         pagination.total / pagination.limit,
       )
     : 0;

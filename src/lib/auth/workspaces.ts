@@ -6,6 +6,7 @@ export const organizationRead = "organization.read";
 export const organizationUpdate = "organization.profile.update";
 export const rolesManage = "roles.manage";
 export const rolesAssign = "roles.assign";
+export const requestReview = "requests.platform.review";
 export const workspacePath = "/espaces";
 
 export function hasWorkspacePermission(granted: readonly string[], required: readonly string[]) {
@@ -29,8 +30,11 @@ export function findWorkspace(profile: SessionProfile, code: string) {
 export function postLoginPath(profile: SessionProfile, requested: string | null) {
   const destination = safeReturnPath(requested);
   const global = canManageOrganizations(profile);
+  const canReview = profile.globalPermissions.includes(requestReview);
   if (requested === destination) {
-    if (destination === "/dash" || destination === "/dash/organisations") {
+    if (destination === "/dash/demandes") {
+      if (canReview) return destination;
+    } else if (destination === "/dash" || destination === "/dash/organisations") {
       if (global) return destination;
     } else if (destination.startsWith("/espace/")) {
       if (findWorkspace(profile, destination.slice("/espace/".length))) return destination;
@@ -40,6 +44,7 @@ export function postLoginPath(profile: SessionProfile, requested: string | null)
   }
 
   if (global) return "/dash";
+  if (canReview) return "/dash/demandes";
   const organizations = accessibleOrganizations(profile);
   return organizations.length === 1 ? "/espace/" + organizations[0].code : workspacePath;
 }

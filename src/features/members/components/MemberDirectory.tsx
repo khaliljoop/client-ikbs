@@ -10,7 +10,7 @@ import { WorkspaceUnavailable } from "@/components/auth/WorkspaceAccess";
 import DataTable from "@/components/ui/table/DataTable";
 import { organisationRoutes } from "@/config/routes";
 import { getMember, listMembers, memberErrorMessage, type DirectoryMember, type MemberDetail as MemberRecord } from "@/lib/api/members";
-import { findWorkspace } from "@/lib/auth/workspaces";
+import { findWorkspace, rolesAssign } from "@/lib/auth/workspaces";
 
 const statusLabels = { ACTIVE: "Actif", INACTIVE: "Inactif", SUSPENDED: "Suspendu", ARCHIVED: "Archivé" };
 
@@ -21,8 +21,8 @@ function LoadError({ message, retry }: { message: string; retry: () => void }) {
   </div>;
 }
 
-function MemberList({ organizationId, href, canWrite, canManageStatus }: {
-  organizationId: string; href: string; canWrite: boolean; canManageStatus: boolean;
+function MemberList({ organizationId, href, canWrite, canManageStatus, rolesHref }: {
+  organizationId: string; href: string; canWrite: boolean; canManageStatus: boolean; rolesHref?: string;
 }) {
   const [showArchives, setShowArchives] = useState(false);
   const archived = canManageStatus && showArchives;
@@ -96,10 +96,15 @@ function MemberList({ organizationId, href, canWrite, canManageStatus }: {
               </Link> },
             { key: "code", label: "Code" },
             { key: "status", label: "Statut", render: (_, member) => statusLabels[member.status] },
-            ...(canManageStatus && !archived ? [{
+            ...(!archived && (canManageStatus || rolesHref) ? [{
               key: "id" as const, label: "Actions", render: (_: string, member: DirectoryMember) =>
-                <MemberStatusActions organizationId={organizationId} member={member}
-                  onSaved={refreshList} onRefresh={refreshList} />,
+                <div className="flex flex-wrap items-center gap-2">
+                  {canManageStatus && <MemberStatusActions organizationId={organizationId} member={member}
+                    onSaved={refreshList} onRefresh={refreshList} />}
+                  {rolesHref && member.status !== "ARCHIVED" && <Link className="font-medium text-ikbs-primary hover:underline"
+                    href={rolesHref + "?" + new URLSearchParams({ memberId: member.id })}
+                    aria-label={`Gérer les rôles de ${member.firstName} ${member.lastName} (${member.code})`}>Gérer les rôles</Link>}
+                </div>,
             }] : []),
           ]}
           data={data?.items ?? []} loading={!current} rowKey={(member) => member.id}
@@ -192,5 +197,6 @@ export default function MemberDirectory({ code, memberId }: { code: string; memb
   const canManageStatus = workspace.permissions.includes("members.lifecycle");
   return memberId
     ? <MemberDetail key={key + ":" + memberId + ":" + canWrite + ":" + canManageStatus} organizationId={workspace.id} memberId={memberId} href={href} canWrite={canWrite} canManageStatus={canManageStatus} />
-    : <MemberList key={key + ":" + canManageStatus} organizationId={workspace.id} href={href} canWrite={canWrite} canManageStatus={canManageStatus} />;
+    : <MemberList key={key + ":" + canManageStatus} organizationId={workspace.id} href={href} canWrite={canWrite}
+      canManageStatus={canManageStatus} rolesHref={workspace.permissions.includes(rolesAssign) ? organisationRoutes.roles(workspace.code) : undefined} />;
 }

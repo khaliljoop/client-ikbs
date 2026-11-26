@@ -111,7 +111,7 @@ test("post-login routes use actual global and local capabilities", () => {
   assert.equal(postLoginPath({ globalPermissions: [], organizations: [north] }, null), "/espace/N1234567");
   assert.equal(postLoginPath({ globalPermissions: [], organizations: [north, south] }, null), "/espaces");
   assert.equal(postLoginPath({ globalPermissions: [], organizations: [] }, null), "/espaces");
-  assert.equal(postLoginPath({ globalPermissions: ["requests.platform.review"], organizations: [] }, null), "/espaces");
+  assert.equal(postLoginPath({ globalPermissions: ["requests.platform.review"], organizations: [] }, null), "/dash/demandes");
 });
 
 test("requested workspace is allowed only if represented by the profile", () => {

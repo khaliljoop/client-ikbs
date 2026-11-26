@@ -1,5 +1,7 @@
 export function backendOrigin(): string {
-  const configured = process.env.IKBS_API_ORIGIN ?? "http://127.0.0.1:3000";
+  const configured = process.env.IKBS_API_ORIGIN ??
+    (process.env.NODE_ENV === "production" ? undefined : "http://127.0.0.1:3000");
+  if (!configured) throw new Error("Configurez IKBS_API_ORIGIN pour le backend Fastify.");
   const url = new URL(configured);
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password ||
       url.pathname !== "/" || url.search || url.hash) {

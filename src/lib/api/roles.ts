@@ -66,10 +66,19 @@ function assignmentPath(id: string, identityId: string) {
   return organizationPath(id) + "/memberships/" + encodeURIComponent(identityId) + "/roles";
 }
 
-export function listMemberships(id: string, page: number, search: string, signal: AbortSignal) {
-  const query = new URLSearchParams({ page: String(page), limit: "15", ...(search && { search }) });
-  return apiClient<{ items: MembershipOption[]; total: number; page: number; limit: number }>(
+type MembershipPage = { items: MembershipOption[]; total: number; page: number; limit: number };
+
+export function listMemberships(id: string, page: number, search: string, signal: AbortSignal, limit = 15) {
+  const query = new URLSearchParams({ page: String(page), limit: String(limit), ...(search && { search }) });
+  return apiClient<MembershipPage>(
     organizationPath(id) + "/memberships?" + query, { signal });
+}
+
+export async function findMembershipForMember(id: string, memberId: string, signal: AbortSignal) {
+  const query = new URLSearchParams({ memberId });
+  const result = await apiClient<MembershipPage>(organizationPath(id) + "/memberships?" + query, { signal });
+  if (result.total > 1) throw new ApiError(409, "AMBIGUOUS_MEMBER_IDENTITY", "Multiple matching memberships");
+  return result.items[0] ?? null;
 }
 
 export function listAssignableRoles(id: string, signal: AbortSignal) {
@@ -96,6 +105,7 @@ export function assignmentErrorMessage(error: unknown) {
     if (error.code === "ROLE_ALREADY_ASSIGNED") return "Ce rôle est déjà attribué.";
     if (error.code === "ACTIVE_MEMBERSHIP_NOT_FOUND") return "Cette appartenance est introuvable ou inactive.";
     if (error.code === "ROLE_ASSIGNMENT_NOT_FOUND") return "Cette affectation a déjà été retirée.";
+    if (error.code === "AMBIGUOUS_MEMBER_IDENTITY") return "Plusieurs comptes actifs correspondent à cette fiche. L’affectation est bloquée.";
   }
   return roleErrorMessage(error);
 }

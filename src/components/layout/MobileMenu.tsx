@@ -69,6 +69,10 @@ export default function MobileMenu() {
               Organisations
             </Link>
 
+            <Link href="/proposer-organisation" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2 hover:bg-ikbs-primary/10">
+              Proposer une organisation
+            </Link>
+
             <Link
               href="/login"
               onClick={closeMenu}

@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { accessibleOrganizations, canManageOrganizations } from "@/lib/auth/workspaces";
+import { accessibleOrganizations, canManageOrganizations, requestReview } from "@/lib/auth/workspaces";
 import SessionUserMenu from "./SessionUserMenu";
 import { useSession } from "./SessionProvider";
 
 export default function WorkspaceSelection() {
   const { profile } = useSession();
   const global = canManageOrganizations(profile);
+  const review = profile.globalPermissions.includes(requestReview);
   const organizations = accessibleOrganizations(profile);
   return (
     <section className="mx-auto max-w-2xl space-y-6 px-4 py-10">
@@ -15,7 +16,7 @@ export default function WorkspaceSelection() {
         <h1 className="text-2xl font-semibold">Mes espaces</h1>
         <SessionUserMenu />
       </header>
-      {!global && organizations.length === 0 ? (
+      {!global && !review && organizations.length === 0 ? (
         <p className="rounded-xl border border-ikbs-border bg-ikbs-card p-5">
           Votre compte est connecté, mais aucun espace IKBS ne vous est accessible.
         </p>
@@ -24,6 +25,7 @@ export default function WorkspaceSelection() {
           {global && (
             <li><Link className="block rounded-xl border border-ikbs-border p-4 hover:border-ikbs-primary" href="/dash">Administration globale</Link></li>
           )}
+          {review && !global && <li><Link className="block rounded-xl border border-ikbs-border p-4" href="/dash/demandes">Traiter les demandes</Link></li>}
           {organizations.map((organization) => (
             <li key={organization.id}>
               <Link className="block rounded-xl border border-ikbs-border p-4 hover:border-ikbs-primary"
@@ -35,6 +37,7 @@ export default function WorkspaceSelection() {
           ))}
         </ul>
       )}
+      <Link href="/proposer-organisation" className="block font-medium text-ikbs-primary">Proposer une organisation</Link>
       <Link href="/organisations" className="text-ikbs-primary">Consulter l’annuaire public</Link>
     </section>
   );

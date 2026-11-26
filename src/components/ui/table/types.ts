@@ -20,6 +20,7 @@ export interface DataTablePagination {
   page: number;
   limit: number;
   total: number;
+  totalPages?: number;
   onPageChange?: (page: number) => void;
   onLimitChange?: (limit: number) => void;
 }

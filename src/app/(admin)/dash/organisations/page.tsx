@@ -1,3 +1,4 @@
+import WorkspaceAccess from "@/components/auth/WorkspaceAccess";
 import OrganizationManagement from "@/features/organizations/components/OrganizationManagement";
 
 export default function AdminOrganizationsPage() {
@@ -13,7 +14,7 @@ export default function AdminOrganizationsPage() {
         </p>
       </div> */}
 
-      <OrganizationManagement />
+      <WorkspaceAccess><OrganizationManagement /></WorkspaceAccess>
     </div>
   );
 }

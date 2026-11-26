@@ -1,3 +1,4 @@
+import { publicAppOrigin } from "@/lib/app-origin";
 import LegacyAuthCleanup from "@/components/auth/LegacyAuthCleanup";
 // import type { Metadata } from "next";
 // import type { ReactNode } from "react";
@@ -45,6 +46,7 @@ import ToastProvider from "@/components/ui/toast/ToastProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: publicAppOrigin(),
   title: "IKBS",
   description:
     "Ibrahima Khalil Business Service — Solutions digitales et gestion des organisations.",
