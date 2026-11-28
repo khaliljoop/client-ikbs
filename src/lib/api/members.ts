@@ -44,6 +44,23 @@ export function getMember(id: string, memberId: string, signal: AbortSignal) {
   return apiClient<MemberDetail>(directoryPath(id) + "/" + encodeURIComponent(memberId), { signal });
 }
 
+export function inviteMember(id: string, memberId: string) {
+  return apiClient<{ status: "SENT" | "PENDING" }>(directoryPath(id) + "/" + encodeURIComponent(memberId) + "/invitation",
+    { method: "POST" });
+}
+
+export function memberInvitationError(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.code === "MEMBER_INVITATION_COOLDOWN") return "Attendez une minute avant de relancer l’invitation.";
+    if (error.code === "APPLICANT_MUST_CLAIM" || error.code === "MEMBER_INVITATION_ALREADY_LINKED") {
+      return "Cette fiche ou cette adresse est déjà associée à un compte. L’invitation n’a pas été envoyée.";
+    }
+    if (error.code === "MEMBER_INVITATION_INACTIVE") return "Seules les fiches actives peuvent être invitées.";
+    if (error.status === 403) return "Votre compte ne peut pas inviter de membres.";
+  }
+  return memberErrorMessage(error);
+}
+
 export function memberErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 401) return "Votre session a expiré.";

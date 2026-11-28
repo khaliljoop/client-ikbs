@@ -98,6 +98,10 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
   let commissionPosts = 0, commissionRefreshFailure = false, commissionPostRefused = true;
   const commissionWrites = [];
   const commissionReads = [];
+  const periods = [];
+  const periodReads = [];
+  const periodWrites = [];
+  let periodRefreshFailure = false, periodConflict = false, memberActive = true, slowHistory = false;
   let rolePostCount = 0, rolePatchCount = 0, roleReads = 0;
   let rolePost = "denied", rolePatch = "denied", roleRefreshFailure = false;
   let backendUnavailable = false;
@@ -115,6 +119,8 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
     ["commission-reader", { token: "c", globalPermissions: [], organizations: [
       { ...north, permissions: ["organization.read", "commissions.read"] }, south,
     ], displayName: "Lecteur commissions" }],
+    ["participation-manager", { token: "p", globalPermissions: [], organizations: [{ ...north,
+      permissions: ["organization.read", "commissions.read", "commissions.members.manage"] }], displayName: "Gestionnaire des participations" }],
     ["empty", { token: "e", globalPermissions: [], organizations: [], displayName: "Compte sans espace" }],
     ["reviewer", { token: "q", globalPermissions: ["requests.platform.review"], organizations: [], displayName: "Compte instructeur" }],
   ]);
@@ -218,10 +224,14 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
     }
     const roleBase = "/api/v1/organizations/north";
     if (path === roleBase + "/members") return send(200, { items: [
-      { id: linkedMemberId, firstName: "Membre", lastName: "Lié", code: "MBR-2026-000001", status: "ACTIVE" },
+      { id: linkedMemberId, firstName: "Membre", lastName: "Lié", code: "MBR-2026-000001", status: memberActive ? "ACTIVE" : "INACTIVE" },
       { id: unlinkedMemberId, firstName: "Membre", lastName: "Sans compte", code: "MBR-2026-000002", status: "ACTIVE" },
     ], total: 2, page: 1, limit: 10 });
-    if (path === roleBase + "/role-permissions") return send(200, { permissions: ["organization.read", "members.write"] });
+    if (path === roleBase + "/members/" + linkedMemberId) return send(200, {
+      id: linkedMemberId, firstName: "Membre", lastName: "Lié", code: "MBR-2026-000001", status: memberActive ? "ACTIVE" : "INACTIVE",
+    });
+    if (path === roleBase + "/role-permissions") return send(200, { permissions: ["organization.read", "members.write",
+      "commissions.read", "commissions.functions.manage"] });
     if (/\/(memberships|assignable-roles)(\/|$)/.test(path)) {
       const organization = sessions.get(token).organizations.find(({ id }) => path.startsWith("/api/v1/organizations/" + id + "/"));
       if (!organization) return failure(404, "ORGANIZATION_NOT_FOUND");
@@ -289,6 +299,44 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
       }
     }
     const commissionBase = roleBase + "/commissions";
+    if (path.startsWith(commissionBase + "/commission/members")) {
+      const organization = sessions.get(token).organizations.find(({ id }) => id === "north");
+      if (!organization?.permissions.includes("commissions.read")) return failure(403, "FORBIDDEN");
+      const commissionStatus = commissions.get("commission").status;
+      const memberStatus = memberActive ? "ACTIVE" : "INACTIVE";
+      const withStates = (row) => ({ ...row, memberStatus, commissionStatus, isOpen: row.status === "OPEN",
+        isEffective: row.status === "OPEN" && memberActive && commissionStatus === "ACTIVE" });
+      if (method === "GET") {
+        const query = Object.fromEntries(new URL(request.url, "http://127.0.0.1").searchParams);
+        periodReads.push(query);
+        if (periodRefreshFailure) return failure(503, "UNAVAILABLE");
+        const items = periods.map(withStates).filter((item) => (!query.status || item.status === query.status) &&
+          (query.effective === undefined || String(item.isEffective) === query.effective)).reverse();
+        if (slowHistory && query.status === "CLOSED") await delay(800);
+        const total = items.length, page = Number(query.page), limit = Number(query.limit);
+        return send(200, { items: items.slice((page - 1) * limit, page * limit), page, limit, total, totalPages: Math.ceil(total / limit) });
+      }
+      if (!organization.permissions.includes("commissions.members.manage")) return failure(403, "FORBIDDEN");
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      const input = JSON.parse(body);
+      periodWrites.push({ method, input });
+      const timestamp = new Date().toISOString();
+      if (method === "POST") {
+        if (periods.some((row) => row.memberId === input.memberId && row.status === "OPEN")) return failure(409, "PARTICIPATION_ALREADY_OPEN");
+        if (!memberActive) return failure(409, "PARTICIPATION_MEMBER_INELIGIBLE");
+        const row = { id: "period-" + periods.length, memberId: input.memberId, organizationId: "north",
+          commissionId: "commission", startedAt: timestamp, createdAt: timestamp, updatedAt: timestamp, endedAt: null, status: "OPEN", version: 1 };
+        periods.push(row);
+        return send(201, withStates(row));
+      }
+      const [, id] = path.match(/members\/([^/]+)\/status$/) ?? [];
+      const row = periods.find((item) => item.id === id);
+      if (!row) return failure(404, "PARTICIPATION_NOT_FOUND");
+      if (periodConflict || row.version !== input.version) return failure(409, "PARTICIPATION_VERSION_CONFLICT");
+      Object.assign(row, { updatedAt: timestamp, endedAt: timestamp, status: "CLOSED", version: 2 });
+      return send(200, withStates(row));
+    }
     if (path === commissionBase || path.startsWith(commissionBase + "/")) {
       if (method === "GET") {
         const filters = new URL(request.url, "http://127.0.0.1").searchParams;
@@ -477,8 +525,14 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
 
   await navigate("/login?redirect=%2F%2Fother.test");
   await waitUntil(() => evaluate("!!document.querySelector('#identifier')"), "Login did not reappear");
-  await delay(500);
-  await submit("fixture", "synthetic-password");
+  await waitUntil(async () => {
+    if (await evaluate("location.pathname === '/dash'")) return true;
+    if (await evaluate("!!document.querySelector('form button[type=submit]:enabled')")) {
+      await submit("fixture", "synthetic-password");
+      await delay(500);
+    }
+    return false;
+  }, "Login after the external return URL did not finish");
   await waitUntil(() => evaluate("location.pathname === '/dash'"), "External return path was not rejected");
   await navigate("/dash");
   await waitUntil(() => bodyIncludes("Compte navigateur"), "Second login failed");
@@ -649,6 +703,9 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
   const roleCode = '[role=dialog] input[name=code]';
   const roleDescription = '[role=dialog] textarea[name=description]';
   await waitUntil(() => evaluate("Boolean(document.querySelector(" + JSON.stringify(roleName) + "))"), "Create modal missing");
+  assert.ok(await bodyIncludes("Consulter les commissions et leurs participants"));
+  assert.ok(await bodyIncludes("Activer les fonctions, les attribuer et clôturer les mandats"));
+  assert.equal(await bodyIncludes("Ajouter et retirer des participants"), false);
   await fillRoleField(roleName, "Bureau test");
   await fillRoleField(roleCode, "bureau-test");
   await evaluate("document.querySelector('[role=dialog] input[type=checkbox]').click()");
@@ -842,6 +899,111 @@ test("Chrome HTTPS exercises login, SSR isolation, public discovery, CRUD and lo
   assert.ok(await evaluate("!!document.querySelector('nav a[href=\"/espace/N1234567/commissions\"]')"));
   assert.equal(await bodyIncludes("Nouvelle commission"), false);
   assert.equal(await evaluate("!!document.querySelector('button[aria-label=\"Archiver la commission\"]')"), false);
+  const openPeriods = async () => {
+    await evaluate(`document.querySelector('button[aria-label="Consulter la commission"]').click()`);
+    await waitUntil(() => bodyIncludes("Informations générales"), "General tab missing");
+    await clickLabel("Participants", "button[role=tab]");
+  };
+  await clickLabel("Voir les participants");
+  await waitUntil(() => evaluate("document.querySelector('[role=tab][aria-selected=true]')?.textContent === 'Participants'"),
+    "Direct participants action did not open the tab");
+  await waitUntil(() => bodyIncludes("Aucune participation"), "Archived participation tab missing");
+  assert.equal(await bodyIncludes("Affecter un membre"), false);
+  await loginAs("participation-manager");
+  commissions.get("commission").status = "ACTIVE";
+  await navigate("/espace/N1234567/commissions");
+  await waitUntil(() => bodyIncludes("Description persistée"), "Participation manager could not load commissions");
+  assert.equal(await bodyIncludes("Nouvelle commission"), false);
+  await openPeriods();
+  await waitUntil(() => bodyIncludes("Aucune participation"), "Empty participation list missing");
+  await clickLabel("Affecter un membre");
+  await waitUntil(() => bodyIncludes("Membre Lié"), "Active member selector did not load");
+  periodRefreshFailure = true;
+  await evaluate(`(() => { const button = document.querySelector('[aria-label="Affecter Membre Lié"]'); button.click(); button.click(); })()`);
+  await waitUntil(() => bodyIncludes("Actualisation impossible"), "Participation refresh error missing");
+  assert.equal(periodWrites.length, 1);
+  assert.deepEqual(periodWrites[0].input, { memberId: linkedMemberId });
+  assert.ok(await bodyIncludes("Membre Lié"));
+  assert.equal(await bodyIncludes("Annuler la sélection"), false);
+  periodRefreshFailure = false;
+  await clickLabel("Réessayer les participations");
+  await waitUntil(async () => !(await bodyIncludes("Actualisation impossible")), "Participation retry failed");
+  const filterPeriods = (value) => evaluate(`(() => {
+    const filter = [...document.querySelectorAll('[role=tabpanel] select')].find((el) => el.querySelector('[value=ineffective]'));
+    filter.value = ${JSON.stringify(value)};
+    filter.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+  memberActive = false;
+  await filterPeriods("ineffective");
+  await waitUntil(() => bodyIncludes("Non effective — membre inactif"), "Open ineffective participation missing");
+  assert.deepEqual(periodReads.at(-1), { page: "1", limit: "10", status: "OPEN", effective: "false" });
+  const requestClosure = () => evaluate(`document.querySelector('button[aria-label="Retirer de la commission"]').click()`);
+  await requestClosure();
+  await waitUntil(() => bodyIncludes("Confirmer le retrait"), "Removal confirmation missing");
+  await clickLabel("Annuler");
+  assert.equal(periodWrites.length, 1);
+  periodConflict = true;
+  await requestClosure();
+  await clickLabel("Confirmer le retrait");
+  await waitUntil(() => bodyIncludes("a changé depuis sa consultation"), "Participation version conflict missing");
+  assert.equal(periodWrites.length, 2);
+  periodConflict = false;
+  await waitUntil(async () => {
+    await requestClosure();
+    return bodyIncludes("Confirmer le retrait");
+  }, "Withdrawal not available after conflict refresh");
+  await clickLabel("Confirmer le retrait");
+  await waitUntil(() => bodyIncludes("Participation clôturée."), "Closure failed");
+  assert.deepEqual(periodWrites.at(-1), { method: "PATCH", input: { status: "CLOSED", version: 1 } });
+  await filterPeriods("history");
+  await waitUntil(() => bodyIncludes("Participation clôturée"), "Closed period missing");
+  assert.equal(await evaluate(`!!document.querySelector('button[aria-label="Retirer de la commission"]')`), false);
+  memberActive = true;
+  await clickLabel("Affecter un membre");
+  await waitUntil(() => evaluate(`!!document.querySelector('[aria-label="Affecter Membre Lié"]:enabled')`), "Reassignment unavailable");
+  await evaluate(`document.querySelector('[aria-label="Affecter Membre Lié"]').click()`);
+  await waitUntil(() => periods.length === 2, "New period not created");
+  await waitUntil(async () => !(await bodyIncludes("Annuler la sélection")), "Assignment picker did not close");
+  await filterPeriods("all");
+  await waitUntil(() => bodyIncludes("Effective"), "New period not effective");
+  assert.ok(await bodyIncludes("Participation clôturée"));
+  assert.notEqual(periods[0].id, periods[1].id);
+  await filterPeriods("history");
+  await waitUntil(() => bodyIncludes("Participation clôturée"), "Reassignment did not retain history");
+  await clickLabel("Affecter un membre");
+  await waitUntil(() => evaluate(`!!document.querySelector('[aria-label="Affecter Membre Lié"]:enabled')`), "History should not hide an open period elsewhere");
+  await evaluate(`document.querySelector('[aria-label="Affecter Membre Lié"]').click()`);
+  await waitUntil(() => bodyIncludes("possède déjà une participation ouverte"), "Duplicate outside the current filter not reported");
+  assert.equal(periods.length, 2);
+  periods.push(...Array.from({ length: 10 }, (_, index) => ({
+    ...periods[0], id: "historical-fixture-" + index,
+  })));
+  await filterPeriods("all");
+  await waitUntil(() => bodyIncludes("Page 1 / 2"), "Participation server pagination missing");
+  await clickLabel("Participations suivantes");
+  await waitUntil(() => bodyIncludes("Page 2 / 2"), "Participation second page missing");
+  slowHistory = true;
+  const readsBeforeHistory = periodReads.length;
+  await filterPeriods("history");
+  await waitUntil(() => periodReads.slice(readsBeforeHistory).some(({ status, page }) => status === "CLOSED" && page === "1"), "Filter did not reset page");
+  await filterPeriods("effective");
+  await waitUntil(() => bodyIncludes("Effective"), "Effective filter missing");
+  await delay(1000);
+  assert.ok(await bodyIncludes("Effective"), "Delayed history replaced the effective filter");
+  slowHistory = false;
+  sessions.get("p".repeat(43)).organizations[0].permissions = ["organization.read", "commissions.read"];
+  await evaluate("window.dispatchEvent(new Event('ikbs:capabilities-changed'))");
+  await waitUntil(async () => !(await bodyIncludes("Affecter un membre")), "Revoked participation actions remained visible");
+  assert.equal(await evaluate(`!!document.querySelector('button[aria-label="Retirer de la commission"]')`), false);
+  commissions.get("commission").status = "ARCHIVED";
+  await loginAs("commission-reader");
+  await navigate("/espace/N1234567/commissions");
+  await waitUntil(() => bodyIncludes("Description persistée"), "Reader lost archive");
+  await openPeriods();
+  await waitUntil(() => bodyIncludes("Filtrer les participations"), "Archived participation filters missing");
+  await filterPeriods("open");
+  await waitUntil(() => bodyIncludes("Non effective — commission archivée"), "Open archived period missing");
+  assert.equal(await bodyIncludes("Affecter un membre"), false);
   const readsBeforeSouth = commissionReads.length;
   await navigate("/espace/S1234567/commissions");
   await waitUntil(() => bodyIncludes("Espace indisponible"), "Unprivileged organization route not blocked");

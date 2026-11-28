@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 interface ModalProps {
@@ -29,6 +29,7 @@ export default function Modal({
   closeOnOverlayClick = false,
   showCloseButton = true,
 }: ModalProps) {
+  const titleId = useId();
   if (!open) {
     return null;
   }
@@ -52,7 +53,7 @@ export default function Modal({
       "
       role="dialog"
       aria-modal="true"
-      aria-labelledby={title ? "modal-title" : undefined}
+      aria-labelledby={title ? titleId : undefined}
     >
       {/* Overlay */}
       <div
@@ -99,7 +100,7 @@ export default function Modal({
           >
             {title ? (
               <h2
-                id="modal-title"
+                id={titleId}
                 className="
                   text-lg
                   font-semibold

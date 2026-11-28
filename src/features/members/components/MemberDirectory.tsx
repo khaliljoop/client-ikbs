@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import MemberStatusActions from "./MemberStatusActions";
 import MemberForm from "./MemberForm";
+import MemberInvitation from "./MemberInvitation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSession } from "@/components/auth/SessionProvider";
 import { WorkspaceUnavailable } from "@/components/auth/WorkspaceAccess";
@@ -115,8 +116,8 @@ function MemberList({ organizationId, href, canWrite, canManageStatus, rolesHref
   </section>;
 }
 
-function MemberDetail({ organizationId, memberId, href, canWrite, canManageStatus }: {
-  organizationId: string; memberId: string; href: string; canWrite: boolean; canManageStatus: boolean;
+function MemberDetail({ organizationId, memberId, href, canWrite, canManageStatus, canInvite }: {
+  canInvite: boolean; organizationId: string; memberId: string; href: string; canWrite: boolean; canManageStatus: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -163,6 +164,8 @@ function MemberDetail({ organizationId, memberId, href, canWrite, canManageStatu
           <div className="flex flex-wrap gap-2">
           {personal && result.status !== "ARCHIVED" && <button type="button" className="rounded-lg border border-ikbs-border px-4 py-2 font-medium hover:bg-ikbs-primary/5"
             onClick={() => setEditing(true)}>Modifier</button>}
+          {canInvite && personal?.email && result.status === "ACTIVE" &&
+            <MemberInvitation key={personal.email} organizationId={organizationId} memberId={result.id} email={personal.email} />}
           {canManageStatus && <MemberStatusActions organizationId={organizationId} member={result}
             onSaved={refreshDetail} onRefresh={refreshDetail} />}
           </div>
@@ -196,7 +199,8 @@ export default function MemberDirectory({ code, memberId }: { code: string; memb
   const canWrite = workspace.permissions.includes("members.write");
   const canManageStatus = workspace.permissions.includes("members.lifecycle");
   return memberId
-    ? <MemberDetail key={key + ":" + memberId + ":" + canWrite + ":" + canManageStatus} organizationId={workspace.id} memberId={memberId} href={href} canWrite={canWrite} canManageStatus={canManageStatus} />
+    ? <MemberDetail key={key + ":" + memberId + ":" + canWrite + ":" + canManageStatus} organizationId={workspace.id} memberId={memberId} href={href} canWrite={canWrite} canManageStatus={canManageStatus}
+      canInvite={canWrite && workspace.permissions.includes(rolesAssign)} />
     : <MemberList key={key + ":" + canManageStatus} organizationId={workspace.id} href={href} canWrite={canWrite}
       canManageStatus={canManageStatus} rolesHref={workspace.permissions.includes(rolesAssign) ? organisationRoutes.roles(workspace.code) : undefined} />;
 }

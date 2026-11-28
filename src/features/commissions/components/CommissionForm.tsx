@@ -5,20 +5,34 @@ import InputGroup from "@/components/ui/forms/InputGroup";
 import TextareaGroup from "@/components/ui/forms/TextareaGroup";
 import Modal from "@/components/ui/modal/Modal";
 import { ApiError } from "@/lib/api/client";
-import { commissionErrorMessage, createCommission, getCommission, updateCommission, type Commission } from "@/lib/api/commissions";
+import { commissionErrorMessage, createCommission, getCommission, updateCommission, type Commission, type CommissionInput } from "@/lib/api/commissions";
 
-export default function CommissionForm({ organizationId, initial, onClose, onSaved }: {
+type EditableRecord = Omit<Commission, "organizationId">;
+type Resource<T extends EditableRecord> = {
+  noun: string;
+  create: (scope: string, input: CommissionInput) => Promise<T>;
+  update: (scope: string, id: string, input: CommissionInput & { version: number }) => Promise<T>;
+  get: (scope: string, id: string) => Promise<T>;
+  error: (failure: unknown) => string;
+};
+
+export const commissionFormResource: Resource<Commission> = {
+  noun: "commission", create: createCommission, update: updateCommission, get: getCommission, error: commissionErrorMessage,
+};
+
+export default function CommissionForm<T extends EditableRecord>({ organizationId, initial, onClose, onSaved, resource }: {
+  resource: Resource<T>;
   organizationId: string;
-  initial: Commission | null;
+  initial: T | null;
   onClose: () => void;
-  onSaved: (commission: Commission) => void;
+  onSaved: (commission: T) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [version, setVersion] = useState(initial?.version);
   const [error, setError] = useState<string>();
   const [conflict, setConflict] = useState(false);
-  const [latest, setLatest] = useState<Commission>();
+  const [latest, setLatest] = useState<T>();
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
 
@@ -32,14 +46,14 @@ export default function CommissionForm({ organizationId, initial, onClose, onSav
     }
     pending.current = true;
     setBusy(true);
-    let saved: Commission;
+    let saved: T;
     try {
       const input = { name: name.trim(), description: description.trim() || null };
       saved = initial && version !== undefined
-        ? await updateCommission(organizationId, initial.id, { ...input, version })
-        : await createCommission(organizationId, input);
+        ? await resource.update(organizationId, initial.id, { ...input, version })
+        : await resource.create(organizationId, input);
     } catch (failure) {
-      setError(commissionErrorMessage(failure));
+      setError(resource.error(failure));
       if (initial && failure instanceof ApiError && failure.status === 409) {
         setConflict(true);
         setLatest(undefined);
@@ -57,17 +71,17 @@ export default function CommissionForm({ organizationId, initial, onClose, onSav
     pending.current = true;
     setBusy(true);
     try {
-      setLatest(await getCommission(organizationId, initial.id));
+      setLatest(await resource.get(organizationId, initial.id));
       setError(undefined);
     } catch (failure) {
-      setError(commissionErrorMessage(failure));
+      setError(resource.error(failure));
     } finally {
       pending.current = false;
       setBusy(false);
     }
   }
 
-  return <Modal open size="lg" title={initial ? "Modifier la commission" : "Nouvelle commission"}
+  return <Modal open size="lg" title={(initial ? "Modifier la " : "Nouvelle ") + resource.noun}
     closeOnOverlayClick={false} onClose={() => { if (!pending.current) onClose(); }}>
     <form className="space-y-4" onSubmit={save}>
       {initial && <p className="font-mono text-sm text-ikbs-muted">{initial.code} · version {version}</p>}
@@ -77,7 +91,7 @@ export default function CommissionForm({ organizationId, initial, onClose, onSav
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {conflict && <section className="space-y-2 rounded-lg border border-ikbs-border p-3 text-sm">
         <p>Votre brouillon est conservé. Relisez la version du serveur avant de reprendre la modification.</p>
-        <button type="button" disabled={busy} onClick={() => void reread()} className="rounded-lg border px-3 py-2">Relire la commission</button>
+        <button type="button" disabled={busy} onClick={() => void reread()} className="rounded-lg border px-3 py-2">Relire la {resource.noun}</button>
         {latest && <>
           <p className="break-words"><strong>Version {latest.version} sur le serveur</strong> · {latest.name}</p>
           <p className="whitespace-pre-wrap break-words">{latest.description || "Aucune description"}</p>
@@ -85,7 +99,7 @@ export default function CommissionForm({ organizationId, initial, onClose, onSav
             setVersion(latest.version);
             setLatest(undefined);
             setConflict(false);
-          }}>Adopter cette version de référence</button> : <p>Cette commission est archivée.</p>}
+          }}>Adopter cette version de référence</button> : <p>Cette {resource.noun} est archivée.</p>}
         </>}
       </section>}
       <div className="flex flex-wrap justify-end gap-2">

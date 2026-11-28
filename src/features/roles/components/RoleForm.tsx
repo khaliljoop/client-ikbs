@@ -11,6 +11,10 @@ const permissionLabels: Record<string, string> = {
   "organization.profile.update": "Modifier le profil de l’organisation",
   "members.write": "Créer et modifier des fiches membres",
   "members.lifecycle": "Gérer les statuts et consulter les archives",
+  "commissions.read": "Consulter les commissions et leurs participants",
+  "commissions.manage": "Gérer le registre des commissions",
+  "commissions.members.manage": "Ajouter et retirer des participants",
+  "commissions.functions.manage": "Activer les fonctions, les attribuer et clôturer les mandats",
 };
 
 export function rolePermissionLabel(permission: string) {
@@ -20,6 +24,7 @@ export function rolePermissionLabel(permission: string) {
 const modules = [
   { name: "Organisation", prefix: "organization." },
   { name: "Membres", prefix: "members." },
+  { name: "Commissions", prefix: "commissions." },
 ];
 
 export default function RoleForm({ organizationId, role, delegable, onClose, onSaved }: {
